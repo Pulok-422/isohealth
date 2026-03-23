@@ -14,6 +14,8 @@ export interface PopulationPoint {
   population: number;
 }
 
+import type { FeatureCollection } from 'geojson';
+
 export interface AnalysisResult {
   facilities: Facility[];
   isochrones: GeoJSON.FeatureCollection | null;
