@@ -14,16 +14,249 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      isochrone_requests: {
+        Row: {
+          created_at: string
+          id: string
+          latitude: number
+          longitude: number
+          profile: string
+          ranges: Json | null
+          request_type: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          latitude: number
+          longitude: number
+          profile?: string
+          ranges?: Json | null
+          request_type?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          latitude?: number
+          longitude?: number
+          profile?: string
+          ranges?: Json | null
+          request_type?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      matrix_requests: {
+        Row: {
+          created_at: string
+          destination_count: number
+          id: string
+          origin_lat: number
+          origin_lon: number
+          profile: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          destination_count?: number
+          id?: string
+          origin_lat: number
+          origin_lon: number
+          profile?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          destination_count?: number
+          id?: string
+          origin_lat?: number
+          origin_lon?: number
+          profile?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          email: string | null
+          full_name: string | null
+          id: string
+          last_active_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          full_name?: string | null
+          id: string
+          last_active_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          full_name?: string | null
+          id?: string
+          last_active_at?: string | null
+        }
+        Relationships: []
+      }
+      route_requests: {
+        Row: {
+          created_at: string
+          end_lat: number
+          end_lon: number
+          id: string
+          profile: string
+          start_lat: number
+          start_lon: number
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          end_lat: number
+          end_lon: number
+          id?: string
+          profile?: string
+          start_lat: number
+          start_lon: number
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          end_lat?: number
+          end_lon?: number
+          id?: string
+          profile?: string
+          start_lat?: number
+          start_lon?: number
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      saved_analyses: {
+        Row: {
+          created_at: string
+          id: string
+          latitude: number
+          location_name: string | null
+          longitude: number
+          results_json: Json | null
+          settings_json: Json | null
+          title: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          latitude: number
+          location_name?: string | null
+          longitude: number
+          results_json?: Json | null
+          settings_json?: Json | null
+          title: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          latitude?: number
+          location_name?: string | null
+          longitude?: number
+          results_json?: Json | null
+          settings_json?: Json | null
+          title?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      simulation_scenarios: {
+        Row: {
+          created_at: string
+          id: string
+          scenario_data_json: Json | null
+          scenario_name: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          scenario_data_json?: Json | null
+          scenario_name: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          scenario_data_json?: Json | null
+          scenario_name?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_search_history: {
+        Row: {
+          created_at: string
+          id: string
+          latitude: number
+          longitude: number
+          place_name: string
+          search_method: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          latitude: number
+          longitude: number
+          place_name: string
+          search_method?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          latitude?: number
+          longitude?: number
+          place_name?: string
+          search_method?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "user"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +383,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "user"],
+    },
   },
 } as const
