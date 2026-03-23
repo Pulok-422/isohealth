@@ -41,7 +41,7 @@ export function generatePopulationGrid(
 export function isPointInIsochrone(
   lat: number,
   lon: number,
-  isochrones: GeoJSON.FeatureCollection | null
+  isochrones: FeatureCollection | null
 ): boolean {
   if (!isochrones?.features) return false;
   
@@ -71,7 +71,7 @@ function pointInPolygon(point: number[], polygon: number[][]): boolean {
 // Calculate coverage stats
 export function calculateCoverage(
   populationGrid: PopulationPoint[],
-  isochrones: GeoJSON.FeatureCollection | null
+  isochrones: FeatureCollection | null
 ) {
   let covered = 0;
   let underserved = 0;
@@ -92,7 +92,7 @@ export function calculateCoverage(
 // Find underserved clusters
 export function findUnderservedClusters(
   populationGrid: PopulationPoint[],
-  isochrones: GeoJSON.FeatureCollection | null,
+  isochrones: FeatureCollection | null,
   minPopulation: number = 200
 ): PopulationPoint[] {
   return populationGrid.filter(
