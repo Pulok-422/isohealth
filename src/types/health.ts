@@ -18,7 +18,7 @@ import type { FeatureCollection } from 'geojson';
 
 export interface AnalysisResult {
   facilities: Facility[];
-  isochrones: GeoJSON.FeatureCollection | null;
+  isochrones: FeatureCollection | null;
   nearestFacility: Facility | null;
   nearestDistance: number | null;
   nearestDuration: number | null;
