@@ -21,27 +21,49 @@ serve(async (req) => {
 
     const radiusMeters = Math.min(radius, 50000);
     const query = `
-      [out:json][timeout:30];
+      [out:json][timeout:60];
       (
         node["amenity"="hospital"](around:${radiusMeters},${lat},${lon});
         node["amenity"="clinic"](around:${radiusMeters},${lat},${lon});
         node["amenity"="pharmacy"](around:${radiusMeters},${lat},${lon});
         node["amenity"="doctors"](around:${radiusMeters},${lat},${lon});
-        node["healthcare"](around:${radiusMeters},${lat},${lon});
         way["amenity"="hospital"](around:${radiusMeters},${lat},${lon});
         way["amenity"="clinic"](around:${radiusMeters},${lat},${lon});
       );
       out center body;
     `;
 
-    const response = await fetch('https://overpass-api.de/api/interpreter', {
-      method: 'POST',
-      body: `data=${encodeURIComponent(query)}`,
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    });
+    const overpassUrls = [
+      'https://overpass-api.de/api/interpreter',
+      'https://overpass.kumi.systems/api/interpreter',
+    ];
 
-    if (!response.ok) {
-      throw new Error(`Overpass API error: ${response.status}`);
+    let response: Response | null = null;
+    let lastError = '';
+
+    for (const url of overpassUrls) {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          response = await fetch(url, {
+            method: 'POST',
+            body: `data=${encodeURIComponent(query)}`,
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            signal: AbortSignal.timeout(45000),
+          });
+          if (response.ok) break;
+          lastError = `${url} returned ${response.status}`;
+          response = null;
+        } catch (e) {
+          lastError = `${url}: ${e.message}`;
+          response = null;
+        }
+        if (attempt === 0) await new Promise(r => setTimeout(r, 2000));
+      }
+      if (response?.ok) break;
+    }
+
+    if (!response || !response.ok) {
+      throw new Error(`Overpass API unavailable: ${lastError}`);
     }
 
     const data = await response.json();
