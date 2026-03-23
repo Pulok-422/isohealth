@@ -6,56 +6,56 @@
 
 @layer base {
   :root {
-    --background: 220 20% 7%;
-    --foreground: 210 20% 90%;
+    --background: 0 0% 98%;
+    --foreground: 220 20% 14%;
 
-    --card: 220 18% 10%;
-    --card-foreground: 210 20% 90%;
+    --card: 0 0% 100%;
+    --card-foreground: 220 20% 14%;
 
-    --popover: 220 18% 12%;
-    --popover-foreground: 210 20% 90%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 20% 14%;
 
-    --primary: 187 80% 48%;
-    --primary-foreground: 220 20% 7%;
+    --primary: 210 80% 45%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 220 15% 16%;
-    --secondary-foreground: 210 20% 80%;
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 220 20% 30%;
 
-    --muted: 220 14% 14%;
+    --muted: 220 14% 96%;
     --muted-foreground: 215 12% 50%;
 
     --accent: 38 90% 55%;
-    --accent-foreground: 220 20% 7%;
+    --accent-foreground: 220 20% 14%;
 
     --destructive: 0 72% 51%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive-foreground: 0 0% 100%;
 
-    --success: 152 60% 45%;
-    --success-foreground: 220 20% 7%;
+    --success: 152 60% 38%;
+    --success-foreground: 0 0% 100%;
 
     --warning: 38 90% 55%;
-    --warning-foreground: 220 20% 7%;
+    --warning-foreground: 220 20% 14%;
 
-    --border: 220 14% 18%;
-    --input: 220 14% 18%;
-    --ring: 187 80% 48%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 210 80% 45%;
 
     --radius: 0.5rem;
 
-    --chart-cyan: 187 80% 48%;
+    --chart-cyan: 210 80% 45%;
     --chart-amber: 38 90% 55%;
     --chart-red: 0 72% 51%;
-    --chart-green: 152 60% 45%;
-    --chart-purple: 270 60% 60%;
+    --chart-green: 152 60% 38%;
+    --chart-purple: 270 60% 55%;
 
-    --sidebar-background: 220 18% 8%;
-    --sidebar-foreground: 210 20% 80%;
-    --sidebar-primary: 187 80% 48%;
-    --sidebar-primary-foreground: 220 20% 7%;
-    --sidebar-accent: 220 15% 14%;
-    --sidebar-accent-foreground: 210 20% 80%;
-    --sidebar-border: 220 14% 16%;
-    --sidebar-ring: 187 80% 48%;
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 220 20% 30%;
+    --sidebar-primary: 210 80% 45%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 14% 96%;
+    --sidebar-accent-foreground: 220 20% 30%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 210 80% 45%;
   }
 }
 
@@ -76,7 +76,7 @@
 
 @layer components {
   .glass-panel {
-    @apply bg-card/80 backdrop-blur-xl border border-border/50 rounded-lg;
+    @apply bg-card border border-border rounded-lg shadow-sm;
   }
 
   .data-card {
@@ -88,7 +88,7 @@
   }
 
   .kpi-label {
-    @apply text-xs uppercase tracking-wider text-muted-foreground;
+    @apply text-xs uppercase tracking-wider text-muted-foreground font-medium;
   }
 
   .map-overlay {
@@ -100,7 +100,7 @@
   }
 
   .panel-tab-active {
-    @apply bg-primary/15 text-primary;
+    @apply bg-primary/10 text-primary;
   }
 
   .panel-tab-inactive {
@@ -117,62 +117,45 @@
     background: inherit;
     opacity: 0.4;
   }
-
-  .gradient-border {
-    position: relative;
-  }
-
-  .gradient-border::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    padding: 1px;
-    border-radius: inherit;
-    background: linear-gradient(135deg, hsl(var(--primary) / 0.3), transparent, hsl(var(--accent) / 0.3));
-    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
-  }
 }
 
-/* Leaflet overrides for dark theme */
+/* Leaflet overrides for light theme */
 .leaflet-container {
-  background: hsl(220 20% 7%) !important;
+  background: hsl(0 0% 98%) !important;
   font-family: 'Inter', sans-serif !important;
 }
 
 .leaflet-control-zoom a {
-  background: hsl(220 18% 12%) !important;
-  color: hsl(210 20% 80%) !important;
-  border-color: hsl(220 14% 18%) !important;
+  background: hsl(0 0% 100%) !important;
+  color: hsl(220 20% 30%) !important;
+  border-color: hsl(220 13% 91%) !important;
 }
 
 .leaflet-control-zoom a:hover {
-  background: hsl(220 15% 16%) !important;
+  background: hsl(220 14% 96%) !important;
 }
 
 .leaflet-control-attribution {
-  background: hsl(220 18% 10% / 0.8) !important;
+  background: hsl(0 0% 100% / 0.9) !important;
   color: hsl(215 12% 50%) !important;
   font-size: 10px !important;
 }
 
 .leaflet-control-attribution a {
-  color: hsl(187 80% 48%) !important;
+  color: hsl(210 80% 45%) !important;
 }
 
 .leaflet-popup-content-wrapper {
-  background: hsl(220 18% 10%) !important;
-  color: hsl(210 20% 90%) !important;
-  border: 1px solid hsl(220 14% 18%) !important;
+  background: hsl(0 0% 100%) !important;
+  color: hsl(220 20% 14%) !important;
+  border: 1px solid hsl(220 13% 91%) !important;
   border-radius: 8px !important;
-  box-shadow: 0 8px 32px hsl(0 0% 0% / 0.4) !important;
+  box-shadow: 0 4px 16px hsl(0 0% 0% / 0.1) !important;
 }
 
 .leaflet-popup-tip {
-  background: hsl(220 18% 10%) !important;
-  border: 1px solid hsl(220 14% 18%) !important;
+  background: hsl(0 0% 100%) !important;
+  border: 1px solid hsl(220 13% 91%) !important;
 }
 
 .leaflet-popup-close-button {
@@ -185,14 +168,43 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: hsl(220 18% 8%);
+  background: hsl(220 14% 96%);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: hsl(220 14% 22%);
+  background: hsl(220 13% 82%);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(220 14% 28%);
+  background: hsl(220 13% 72%);
+}
+
+/* Marker cluster styles */
+.marker-cluster-small {
+  background-color: hsl(210 80% 45% / 0.3) !important;
+}
+.marker-cluster-small div {
+  background-color: hsl(210 80% 45% / 0.6) !important;
+  color: white !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+}
+.marker-cluster-medium {
+  background-color: hsl(38 90% 55% / 0.3) !important;
+}
+.marker-cluster-medium div {
+  background-color: hsl(38 90% 55% / 0.6) !important;
+  color: white !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+}
+.marker-cluster-large {
+  background-color: hsl(0 72% 51% / 0.3) !important;
+}
+.marker-cluster-large div {
+  background-color: hsl(0 72% 51% / 0.6) !important;
+  color: white !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
 }

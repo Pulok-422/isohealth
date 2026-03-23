@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { useAppState } from '@/context/AppContext';
 import { fetchFacilities, generateIsochrones } from '@/lib/api';
 import { generatePopulationGrid, calculateCoverage, findUnderservedClusters, suggestFacilityLocations, haversine } from '@/lib/analysis';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
 export function useAnalysis() {
@@ -12,7 +13,6 @@ export function useAnalysis() {
     dispatch({ type: 'SET_ANALYSIS_POINT', payload: [lat, lon] });
 
     try {
-      // Fetch facilities and isochrones in parallel
       const [facilities, isochrones] = await Promise.all([
         fetchFacilities(lat, lon, state.searchRadius),
         generateIsochrones(lat, lon, state.transportProfile, state.timeThresholds),
@@ -20,14 +20,11 @@ export function useAnalysis() {
 
       dispatch({ type: 'SET_FACILITIES', payload: facilities });
 
-      // Generate population grid
       const popGrid = generatePopulationGrid(lat, lon);
       dispatch({ type: 'SET_POPULATION', payload: popGrid });
 
-      // Calculate coverage
       const coverage = calculateCoverage(popGrid, isochrones);
 
-      // Find nearest facility
       let nearestFacility = null;
       let nearestDistance = null;
       if (facilities.length > 0) {
@@ -51,17 +48,30 @@ export function useAnalysis() {
           isochrones,
           nearestFacility,
           nearestDistance: nearestDistance ? nearestDistance * 1000 : null,
-          nearestDuration: nearestDistance ? nearestDistance * 60 : null, // rough estimate
+          nearestDuration: nearestDistance ? nearestDistance * 60 : null,
           populationCovered: coverage.covered,
           populationUnderserved: coverage.underserved,
           totalPopulation: coverage.total,
         },
       });
 
-      // Run optimization
       const underserved = findUnderservedClusters(popGrid, isochrones);
       const suggestions = suggestFacilityLocations(underserved);
       dispatch({ type: 'SET_OPTIMIZATION', payload: suggestions });
+
+      // Log to database (best-effort, don't block on failure)
+      supabase.auth.getUser().then(({ data: { user } }) => {
+        if (user) {
+          supabase.from('isochrone_requests').insert({
+            user_id: user.id,
+            latitude: lat,
+            longitude: lon,
+            profile: state.transportProfile,
+            ranges: state.timeThresholds,
+            request_type: 'analysis',
+          }).then(() => {});
+        }
+      });
 
       toast.success(`Analysis complete: ${facilities.length} facilities found`);
     } catch (error: any) {
