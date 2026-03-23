@@ -1,16 +1,26 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { AppProvider } from '@/context/AppContext';
+import { TopBar } from '@/components/TopBar';
+import { HealthMap } from '@/components/HealthMap';
+import { AnalyticsPanel } from '@/components/AnalyticsPanel';
 
-// IMPORTANT: Fully REPLACE this with your own code
-const PlaceholderIndex = () => {
-  // PLACEHOLDER: Replace this entire return statement with the user's app.
-  // The inline background color is intentionally not part of the design system.
+const Index = () => {
   return (
-    <div className="flex min-h-screen items-center justify-center" style={{ backgroundColor: '#fcfbf8' }}>
-      <img data-lovable-blank-page-placeholder="REMOVE_THIS" src="/placeholder.svg" alt="Your app will live here!" />
-    </div>
+    <AppProvider>
+      <div className="h-screen flex flex-col overflow-hidden">
+        <TopBar />
+        <div className="flex-1 flex overflow-hidden">
+          {/* Map - 70% */}
+          <div className="flex-1 relative">
+            <HealthMap />
+          </div>
+          {/* Panel - 30% */}
+          <div className="w-[380px] flex-shrink-0 hidden md:block">
+            <AnalyticsPanel />
+          </div>
+        </div>
+      </div>
+    </AppProvider>
   );
 };
-
-const Index = PlaceholderIndex;
 
 export default Index;
