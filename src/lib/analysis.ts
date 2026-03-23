@@ -1,4 +1,5 @@
 import type { PopulationPoint } from '@/types/health';
+import type { FeatureCollection } from 'geojson';
 
 // Generate mock population grid around a center point
 export function generatePopulationGrid(
