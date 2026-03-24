@@ -38,7 +38,7 @@ type Action =
 const initialState: State = {
   center: [-1.2921, 36.8219], // Nairobi
   zoom: 12,
-  transportProfile: 'driving-car',
+  transportProfile: 'foot-walking', // Default to walking
   analysisPoint: null,
   timeThresholds: [600, 1200, 1800],
   searchRadius: 10000,
@@ -46,8 +46,8 @@ const initialState: State = {
   isAnalyzing: false,
   showFacilities: true,
   showIsochrones: true,
-  showPopulation: true,
-  showUnderserved: true,
+  showPopulation: false,  // OFF by default
+  showUnderserved: false,  // OFF by default
   simulationMode: false,
   facilities: [],
   simulatedFacilities: [],

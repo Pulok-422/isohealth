@@ -31,7 +31,8 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 const AppRoutes = () => (
   <Routes>
     <Route path="/auth" element={<Auth />} />
-    <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+    {/* Main map is now accessible without login */}
+    <Route path="/" element={<Index />} />
     <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
     <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
     <Route path="*" element={<NotFound />} />

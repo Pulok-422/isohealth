@@ -1,9 +1,22 @@
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import { useAppState } from '@/context/AppContext';
 import { fetchFacilities, generateIsochrones } from '@/lib/api';
 import { generatePopulationGrid, calculateCoverage, findUnderservedClusters, suggestFacilityLocations, haversine } from '@/lib/analysis';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+
+// Simple in-memory cache
+const cache = new Map<string, { data: any; ts: number }>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 min
+
+function getCached(key: string) {
+  const entry = cache.get(key);
+  if (entry && Date.now() - entry.ts < CACHE_TTL) return entry.data;
+  return null;
+}
+function setCache(key: string, data: any) {
+  cache.set(key, { data, ts: Date.now() });
+}
 
 export function useAnalysis() {
   const { state, dispatch } = useAppState();
@@ -13,10 +26,18 @@ export function useAnalysis() {
     dispatch({ type: 'SET_ANALYSIS_POINT', payload: [lat, lon] });
 
     try {
-      const [facilities, isochrones] = await Promise.all([
-        fetchFacilities(lat, lon, state.searchRadius),
-        generateIsochrones(lat, lon, state.transportProfile, state.timeThresholds),
-      ]);
+      // Cache keys
+      const facKey = `fac-${lat.toFixed(3)}-${lon.toFixed(3)}-${state.searchRadius}`;
+      const isoKey = `iso-${lat.toFixed(3)}-${lon.toFixed(3)}-${state.transportProfile}-${state.timeThresholds.join(',')}`;
+
+      // Fetch with cache
+      let facilities = getCached(facKey);
+      let isochrones = getCached(isoKey);
+
+      const promises: Promise<any>[] = [];
+      if (!facilities) promises.push(fetchFacilities(lat, lon, state.searchRadius).then(f => { facilities = f; setCache(facKey, f); }));
+      if (!isochrones) promises.push(generateIsochrones(lat, lon, state.transportProfile, state.timeThresholds).then(i => { isochrones = i; setCache(isoKey, i); }));
+      if (promises.length) await Promise.all(promises);
 
       dispatch({ type: 'SET_FACILITIES', payload: facilities });
 
@@ -59,7 +80,7 @@ export function useAnalysis() {
       const suggestions = suggestFacilityLocations(underserved);
       dispatch({ type: 'SET_OPTIMIZATION', payload: suggestions });
 
-      // Log to database (best-effort, don't block on failure)
+      // Log to database (best-effort for logged-in users, session tracking for guests)
       supabase.auth.getUser().then(({ data: { user } }) => {
         if (user) {
           supabase.from('isochrone_requests').insert({

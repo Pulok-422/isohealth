@@ -1,19 +1,17 @@
-import { useEffect, useRef, useMemo, useState } from 'react';
+import { useEffect, useRef, useMemo, useState, useCallback } from 'react';
 import { MapContainer, TileLayer, useMap, useMapEvents, CircleMarker, GeoJSON, Popup, Marker } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import 'leaflet.markercluster/dist/MarkerCluster.css';
+import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
+import 'leaflet.markercluster';
 import { useAppState } from '@/context/AppContext';
-import { useAnalysis } from '@/hooks/useAnalysis';
 import type { Facility, PopulationPoint } from '@/types/health';
 
-// Custom facility icons using divIcon
+// Custom facility icons
 function createFacilityIcon(type: string, isSimulated: boolean = false) {
   const icons: Record<string, string> = {
-    hospital: '🏥',
-    clinic: '🏨',
-    pharmacy: '💊',
-    doctors: '👨‍⚕️',
-    healthcare: '⚕️',
+    hospital: '🏥', clinic: '🏨', pharmacy: '💊', doctors: '👨‍⚕️', healthcare: '⚕️',
   };
   const emoji = icons[type] || '⚕️';
   const border = isSimulated ? 'border: 2px dashed hsl(38, 90%, 55%);' : 'border: 1px solid hsl(220, 13%, 85%);';
@@ -38,9 +36,9 @@ function MapUpdater() {
   return null;
 }
 
+// Map click only sets marker, does NOT trigger analysis
 function MapClickHandler() {
   const { state, dispatch } = useAppState();
-  const { runAnalysis } = useAnalysis();
   useMapEvents({
     click(e) {
       const { lat, lng } = e.latlng;
@@ -57,61 +55,58 @@ function MapClickHandler() {
         dispatch({ type: 'ADD_SIMULATED_FACILITY', payload: newFacility });
       } else {
         dispatch({ type: 'SET_ANALYSIS_POINT', payload: [lat, lng] });
-        runAnalysis(lat, lng);
       }
     },
   });
   return null;
 }
 
-function FacilityMarkers({ facilities }: { facilities: Facility[] }) {
-  return (
-    <>
-      {facilities.map((f) => (
-        <Marker
-          key={`${f.id}-${f.isSimulated ? 's' : 'r'}`}
-          position={[f.lat, f.lon]}
-          icon={createFacilityIcon(f.type, f.isSimulated)}
-        >
-          <Popup>
-            <div className="text-sm space-y-1">
-              <div className="font-semibold">{f.name}</div>
-              <div className="text-xs text-muted-foreground capitalize">{f.type}{f.isSimulated ? ' (Simulated)' : ''}</div>
-              <div className="text-xs font-mono text-muted-foreground">{f.lat.toFixed(4)}, {f.lon.toFixed(4)}</div>
-            </div>
-          </Popup>
-        </Marker>
-      ))}
-    </>
-  );
+// Clustered facility markers using leaflet.markercluster
+function ClusteredFacilityMarkers({ facilities }: { facilities: Facility[] }) {
+  const map = useMap();
+  const clusterRef = useRef<L.MarkerClusterGroup | null>(null);
+
+  useEffect(() => {
+    if (clusterRef.current) {
+      map.removeLayer(clusterRef.current);
+    }
+    const cluster = (L as any).markerClusterGroup({
+      maxClusterRadius: 50,
+      spiderfyOnMaxZoom: true,
+      showCoverageOnHover: false,
+      zoomToBoundsOnClick: true,
+      disableClusteringAtZoom: 16,
+    });
+
+    facilities.forEach((f) => {
+      const marker = L.marker([f.lat, f.lon], {
+        icon: createFacilityIcon(f.type, f.isSimulated),
+      });
+      marker.bindPopup(
+        `<div style="font-size:13px"><strong>${f.name}</strong><br/><span style="text-transform:capitalize">${f.type}${f.isSimulated ? ' (Simulated)' : ''}</span><br/><code>${f.lat.toFixed(4)}, ${f.lon.toFixed(4)}</code></div>`
+      );
+      cluster.addLayer(marker);
+    });
+
+    map.addLayer(cluster);
+    clusterRef.current = cluster;
+
+    return () => {
+      if (clusterRef.current) {
+        map.removeLayer(clusterRef.current);
+      }
+    };
+  }, [facilities, map]);
+
+  return null;
 }
 
 function PopulationHeatmap({ points }: { points: PopulationPoint[] }) {
-  const map = useMap();
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-
-  useEffect(() => {
-    if (points.length === 0) return;
-    const canvas = document.createElement('canvas');
-    canvasRef.current = canvas;
-    const maxPop = Math.max(...points.map(p => p.population), 1);
-
-    const overlay = L.DomUtil.create('div');
-    const canvasOverlay = (L as any).DomOverlay ? null : null; // fallback to circle approach
-
-    // Use simple CircleMarker overlay approach via the map
-    // We'll use a custom pane for performance
-    return () => {};
-  }, [points, map]);
-
-  // Fallback: use subtle hex grid with canvas overlay
   const maxPop = useMemo(() => Math.max(...points.map(p => p.population), 1), [points]);
-
   return (
     <>
       {points.map((p, i) => {
         const intensity = p.population / maxPop;
-        // Use subtle filled rectangles to approximate choropleth
         return (
           <CircleMarker
             key={`pop-${i}`}
@@ -171,7 +166,7 @@ function AnalysisPointMarker() {
     >
       <Popup>
         <div className="text-sm">
-          <div className="font-semibold">📍 Analysis Point</div>
+          <div className="font-semibold">📍 Selected Location</div>
           <div className="text-xs font-mono text-muted-foreground">
             {state.analysisPoint[0].toFixed(4)}, {state.analysisPoint[1].toFixed(4)}
           </div>
@@ -181,7 +176,6 @@ function AnalysisPointMarker() {
   );
 }
 
-// Isochrone colors: yellow → orange → red
 const isochroneColors = ['#fbbf2480', '#f5970080', '#ef444480'];
 const isochroneBorders = ['#fbbf24', '#f59700', '#ef4444'];
 
@@ -191,9 +185,7 @@ function BasemapSwitcher() {
   const layerRef = useRef<L.TileLayer | null>(null);
 
   useEffect(() => {
-    if (layerRef.current) {
-      map.removeLayer(layerRef.current);
-    }
+    if (layerRef.current) map.removeLayer(layerRef.current);
     const bm = BASEMAPS[basemap];
     const layer = L.tileLayer(bm.url, { attribution: bm.attribution });
     layer.addTo(map);
@@ -263,18 +255,20 @@ export function HealthMap() {
           />
         )}
 
-        {/* Population */}
+        {/* Population (OFF by default) */}
         {state.showPopulation && state.populationGrid.length > 0 && (
           <PopulationHeatmap points={state.populationGrid} />
         )}
 
-        {/* Facilities */}
-        {state.showFacilities && <FacilityMarkers facilities={allFacilities} />}
+        {/* Facilities with clustering */}
+        {state.showFacilities && allFacilities.length > 0 && (
+          <ClusteredFacilityMarkers facilities={allFacilities} />
+        )}
 
         {/* Optimization */}
         <OptimizationMarkers />
 
-        {/* Analysis point */}
+        {/* Selected location marker */}
         <AnalysisPointMarker />
 
         {/* Route */}
@@ -315,7 +309,7 @@ export function HealthMap() {
             <div className="text-xs text-muted-foreground space-y-1">
               <p className="font-medium text-foreground text-sm">Get Started</p>
               <p>1. Select a location (search, click map, or use My Location)</p>
-              <p>2. Choose a travel mode (Drive, Cycle, Walk)</p>
+              <p>2. Choose a travel mode (Walk, Drive, Cycle)</p>
               <p>3. Click <span className="text-primary font-medium">Analyze</span> to see results</p>
             </div>
           </div>

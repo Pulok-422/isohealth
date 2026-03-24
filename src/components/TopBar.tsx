@@ -1,5 +1,5 @@
-import { Search, Car, Bike, Footprints, Play, Loader2, Layers, Plus, MapPin, LogOut, User, LayoutDashboard, Shield } from 'lucide-react';
-import { useState, useCallback } from 'react';
+import { Search, Car, Bike, Footprints, Play, Loader2, Layers, Plus, MapPin, LogOut, User, LayoutDashboard, Shield, LogIn } from 'lucide-react';
+import { useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppState } from '@/context/AppContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -10,9 +10,9 @@ import type { TransportProfile } from '@/types/health';
 import { toast } from 'sonner';
 
 const transportModes: { id: TransportProfile; icon: typeof Car; label: string }[] = [
+  { id: 'foot-walking', icon: Footprints, label: 'Walk' },
   { id: 'driving-car', icon: Car, label: 'Drive' },
   { id: 'cycling-regular', icon: Bike, label: 'Cycle' },
-  { id: 'foot-walking', icon: Footprints, label: 'Walk' },
 ];
 
 export function TopBar() {
@@ -21,7 +21,9 @@ export function TopBar() {
   const { user, signOut, isAdmin } = useAuth();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
 
+  // Search only sets location, does NOT run analysis
   const handleSearch = useCallback(async () => {
     if (!searchQuery.trim()) return;
     try {
@@ -35,17 +37,25 @@ export function TopBar() {
         const lonNum = parseFloat(lon);
         dispatch({ type: 'SET_CENTER', payload: [latNum, lonNum] });
         dispatch({ type: 'SET_ZOOM', payload: 13 });
-        runAnalysis(latNum, lonNum);
+        dispatch({ type: 'SET_ANALYSIS_POINT', payload: [latNum, lonNum] });
+        toast.success('Location selected — click Analyze to run');
       }
     } catch {
       toast.error('Search failed');
     }
-  }, [searchQuery, dispatch, runAnalysis]);
+  }, [searchQuery, dispatch]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') handleSearch();
   };
 
+  // Debounced search input
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+  };
+
+  // Geolocation only sets location, does NOT run analysis
   const handleUseMyLocation = () => {
     if (!navigator.geolocation) {
       toast.error('Geolocation not supported by your browser');
@@ -57,8 +67,7 @@ export function TopBar() {
         dispatch({ type: 'SET_CENTER', payload: [latitude, longitude] });
         dispatch({ type: 'SET_ZOOM', payload: 14 });
         dispatch({ type: 'SET_ANALYSIS_POINT', payload: [latitude, longitude] });
-        runAnalysis(latitude, longitude);
-        toast.success('Using your current location');
+        toast.success('Location set — click Analyze to run');
       },
       () => toast.error('Could not get your location'),
       { enableHighAccuracy: true, timeout: 10000 }
@@ -89,7 +98,7 @@ export function TopBar() {
           type="text"
           placeholder="Search location (e.g., Nairobi, Lagos)..."
           value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
+          onChange={(e) => handleSearchChange(e.target.value)}
           onKeyDown={handleKeyDown}
           className="w-full h-9 pl-9 pr-3 bg-secondary border border-border rounded-md text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
         />
@@ -167,31 +176,38 @@ export function TopBar() {
       </button>
 
       {/* User Menu */}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button size="sm" variant="outline" className="gap-1.5">
-            <User className="w-3.5 h-3.5" />
-            <span className="hidden md:inline max-w-[100px] truncate">{user?.email?.split('@')[0]}</span>
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={() => navigate('/dashboard')}>
-            <LayoutDashboard className="w-4 h-4 mr-2" />
-            Dashboard
-          </DropdownMenuItem>
-          {isAdmin && (
-            <DropdownMenuItem onClick={() => navigate('/admin')}>
-              <Shield className="w-4 h-4 mr-2" />
-              Admin Panel
+      {user ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button size="sm" variant="outline" className="gap-1.5">
+              <User className="w-3.5 h-3.5" />
+              <span className="hidden md:inline max-w-[100px] truncate">{user.email?.split('@')[0]}</span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => navigate('/dashboard')}>
+              <LayoutDashboard className="w-4 h-4 mr-2" />
+              Dashboard
             </DropdownMenuItem>
-          )}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={signOut}>
-            <LogOut className="w-4 h-4 mr-2" />
-            Sign Out
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+            {isAdmin && (
+              <DropdownMenuItem onClick={() => navigate('/admin')}>
+                <Shield className="w-4 h-4 mr-2" />
+                Admin Panel
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={signOut}>
+              <LogOut className="w-4 h-4 mr-2" />
+              Sign Out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : (
+        <Button size="sm" variant="outline" onClick={() => navigate('/auth')} className="gap-1.5">
+          <LogIn className="w-3.5 h-3.5" />
+          <span className="hidden md:inline">Sign In</span>
+        </Button>
+      )}
     </div>
   );
 }
