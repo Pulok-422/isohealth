@@ -241,13 +241,24 @@ function AnalysisPointMarker() {
   );
 }
 
+// 6-band palette: 10, 20, 30, 40, 50, 60 min
 const isochroneColors = [
-  'rgba(250, 204, 21, 0.18)',
-  'rgba(249, 115, 22, 0.18)',
-  'rgba(239, 68, 68, 0.18)',
+  'rgba(255, 245, 157, 0.50)', // 10
+  'rgba(255, 224, 130, 0.50)', // 20
+  'rgba(255, 183, 77, 0.50)',  // 30
+  'rgba(255, 138, 101, 0.50)', // 40
+  'rgba(239, 83, 80, 0.50)',   // 50
+  'rgba(173, 20, 87, 0.50)',   // 60
 ];
 
-const isochroneBorders = ['#facc15', '#f97316', '#ef4444'];
+const isochroneBorders = [
+  '#fff59d',
+  '#ffe082',
+  '#ffb74d',
+  '#ff8a65',
+  '#ef5350',
+  '#ad1457',
+];
 
 function FloatingMapControl({
   basemap,
@@ -350,22 +361,43 @@ export function HealthMap() {
         <MapClickHandler />
         <IsochroneFitter />
 
-        {state.showIsochrones && state.analysisResult?.isochrones && (
-          <GeoJSON
-            key={JSON.stringify(state.analysisResult.isochrones).slice(0, 100)}
-            data={state.analysisResult.isochrones as any}
-            style={(feature: any) => {
-              const idx = feature?.properties?.group_index || 0;
+        {state.showIsochrones && state.analysisResult?.isochrones && (() => {
+          const rawFeatures = Array.isArray((state.analysisResult.isochrones as any)?.features)
+            ? [...(state.analysisResult.isochrones as any).features]
+            : [];
 
-              return {
-                fillColor: isochroneColors[idx] || isochroneColors[0],
-                color: isochroneBorders[idx] || isochroneBorders[0],
-                weight: 2,
-                fillOpacity: 0.18,
-              };
-            }}
-          />
-        )}
+          // Draw largest value first, smallest last, so inner bands stay visible
+          const sortedFeatures = rawFeatures.sort(
+            (a: any, b: any) => (b?.properties?.value ?? 0) - (a?.properties?.value ?? 0)
+          );
+
+          // Create ascending lookup for color assignment
+          const sortedValues = [...rawFeatures]
+            .map((f: any) => f?.properties?.value)
+            .filter((v: any) => typeof v === 'number')
+            .sort((a: number, b: number) => a - b);
+
+          return (
+            <GeoJSON
+              key="isochrones-fixed"
+              data={{
+                ...(state.analysisResult.isochrones as any),
+                features: sortedFeatures,
+              }}
+              style={(feature: any) => {
+                const value = feature?.properties?.value;
+                const idx = sortedValues.indexOf(value);
+
+                return {
+                  fillColor: isochroneColors[idx] || isochroneColors[0],
+                  color: isochroneBorders[idx] || isochroneBorders[0],
+                  weight: 1.5,
+                  fillOpacity: 0.35,
+                };
+              }}
+            />
+          );
+        })()}
 
         {state.showFacilities && allFacilities.length > 0 && (
           <ClusteredFacilityMarkers facilities={allFacilities} />
