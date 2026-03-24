@@ -82,6 +82,7 @@ function reducer(state: State, action: Action): State {
     case 'SET_OPTIMIZATION': return { ...state, optimizationResults: action.payload };
     case 'SET_ROUTE': return { ...state, routeGeoJson: action.payload };
     case 'SET_SEARCH_RADIUS': return { ...state, searchRadius: action.payload };
+    case 'RESET_ANALYSIS': return { ...state, analysisPoint: null, analysisResult: null, facilities: [], populationGrid: [], optimizationResults: [], routeGeoJson: null };
     default: return state;
   }
 }

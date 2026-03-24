@@ -102,7 +102,7 @@ export function SummaryTab() {
       {/* Nearest facility */}
       {result.nearestFacility && (
         <div className="data-card">
-          <span className="kpi-label">Nearest Health Facility</span>
+          <span className="kpi-label">Closest Health Facility</span>
           <div className="flex items-center gap-2 mt-1">
             <span className="text-sm font-medium">{result.nearestFacility.name}</span>
           </div>
