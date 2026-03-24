@@ -93,8 +93,8 @@ export function SummaryTab() {
 
       {/* KPIs */}
       <div className="grid grid-cols-2 gap-2">
-        <KPICard icon={Building2} label="Nearby Facilities" value={result.facilities.length} />
-        <KPICard icon={Clock} label="Nearest Facility" value={result.nearestDuration ? formatDuration(result.nearestDuration) : '—'} color="text-primary" />
+        <KPICard icon={Building2} label="Nearby Health Facilities" value={result.facilities.length} />
+        <KPICard icon={Clock} label="Closest Facility" value={result.nearestDuration ? formatDuration(result.nearestDuration) : '—'} color="text-primary" />
         <KPICard icon={Users} label="Population with Access" value={`${coveragePercent}%`} color="text-success" />
         <KPICard icon={AlertTriangle} label="Population Lacking Access" value={result.populationUnderserved.toLocaleString()} color="text-destructive" />
       </div>
