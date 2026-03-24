@@ -1,4 +1,4 @@
-import { Search, Car, Bike, Footprints, Play, Loader2, Layers, Plus, MapPin, LogOut, User, LayoutDashboard, Shield, LogIn } from 'lucide-react';
+import { Search, Car, Bike, Footprints, Play, Loader2, Plus, MapPin, LogIn, User, LayoutDashboard, Shield, LogOut, RotateCcw } from 'lucide-react';
 import { useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppState } from '@/context/AppContext';
@@ -21,9 +21,7 @@ export function TopBar() {
   const { user, signOut, isAdmin } = useAuth();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
 
-  // Search only sets location, does NOT run analysis
   const handleSearch = useCallback(async () => {
     if (!searchQuery.trim()) return;
     try {
@@ -49,16 +47,9 @@ export function TopBar() {
     if (e.key === 'Enter') handleSearch();
   };
 
-  // Debounced search input
-  const handleSearchChange = (value: string) => {
-    setSearchQuery(value);
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-  };
-
-  // Geolocation only sets location, does NOT run analysis
   const handleUseMyLocation = () => {
     if (!navigator.geolocation) {
-      toast.error('Geolocation not supported by your browser');
+      toast.error('Geolocation not supported');
       return;
     }
     navigator.geolocation.getCurrentPosition(
@@ -73,13 +64,6 @@ export function TopBar() {
       { enableHighAccuracy: true, timeout: 10000 }
     );
   };
-
-  const layers = [
-    { key: 'showFacilities' as const, label: 'Facilities' },
-    { key: 'showIsochrones' as const, label: 'Isochrones' },
-    { key: 'showPopulation' as const, label: 'Population' },
-    { key: 'showUnderserved' as const, label: 'Underserved' },
-  ];
 
   return (
     <div className="h-14 bg-card border-b border-border flex items-center px-4 gap-3 z-50 shadow-sm">
@@ -98,13 +82,13 @@ export function TopBar() {
           type="text"
           placeholder="Search location (e.g., Nairobi, Lagos)..."
           value={searchQuery}
-          onChange={(e) => handleSearchChange(e.target.value)}
+          onChange={(e) => setSearchQuery(e.target.value)}
           onKeyDown={handleKeyDown}
           className="w-full h-9 pl-9 pr-3 bg-secondary border border-border rounded-md text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
         />
       </div>
 
-      {/* Use My Location */}
+      {/* My Location */}
       <Button size="sm" variant="outline" onClick={handleUseMyLocation} className="gap-1.5 hidden sm:flex">
         <MapPin className="w-3.5 h-3.5" />
         <span className="hidden lg:inline">My Location</span>
@@ -129,22 +113,6 @@ export function TopBar() {
         ))}
       </div>
 
-      {/* Layer Toggles */}
-      <div className="hidden lg:flex items-center gap-1">
-        <Layers className="w-3.5 h-3.5 text-muted-foreground mr-1" />
-        {layers.map(({ key, label }) => (
-          <button
-            key={key}
-            onClick={() => dispatch({ type: 'TOGGLE_LAYER', payload: key })}
-            className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
-              state[key] ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
       {/* Analyze */}
       <Button
         size="sm"
@@ -162,7 +130,7 @@ export function TopBar() {
         <span className="hidden sm:inline">Analyze</span>
       </Button>
 
-      {/* Simulation Toggle */}
+      {/* Simulate */}
       <button
         onClick={() => dispatch({ type: 'SET_SIMULATION_MODE', payload: !state.simulationMode })}
         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors border ${

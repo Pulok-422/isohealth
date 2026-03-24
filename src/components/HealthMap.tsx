@@ -1,4 +1,4 @@
-import { useEffect, useRef, useMemo, useState, useCallback } from 'react';
+import { useEffect, useRef, useMemo, useState } from 'react';
 import { MapContainer, TileLayer, useMap, useMapEvents, CircleMarker, GeoJSON, Popup, Marker } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -6,9 +6,10 @@ import 'leaflet.markercluster/dist/MarkerCluster.css';
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
 import 'leaflet.markercluster';
 import { useAppState } from '@/context/AppContext';
+import { Layers, MapPin, Eye, EyeOff, RotateCcw } from 'lucide-react';
 import type { Facility, PopulationPoint } from '@/types/health';
 
-// Custom facility icons
+// Facility icon — emoji at high zoom, simple dot at low zoom
 function createFacilityIcon(type: string, isSimulated: boolean = false) {
   const icons: Record<string, string> = {
     hospital: '🏥', clinic: '🏨', pharmacy: '💊', doctors: '👨‍⚕️', healthcare: '⚕️',
@@ -23,6 +24,14 @@ function createFacilityIcon(type: string, isSimulated: boolean = false) {
   });
 }
 
+// Selected location pin icon
+const selectedLocationIcon = L.divIcon({
+  html: `<div style="width:20px;height:20px;background:hsl(210,80%,45%);border:3px solid white;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,0.3);"></div>`,
+  className: '',
+  iconSize: [20, 20],
+  iconAnchor: [10, 10],
+});
+
 const BASEMAPS = {
   positron: { url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', label: 'Light', attribution: '&copy; CARTO' },
   osm: { url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', label: 'OSM', attribution: '&copy; OpenStreetMap' },
@@ -36,7 +45,29 @@ function MapUpdater() {
   return null;
 }
 
-// Map click only sets marker, does NOT trigger analysis
+// Fit map to isochrone bounds after analysis
+function IsochroneFitter() {
+  const { state } = useAppState();
+  const map = useMap();
+  const prevIso = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!state.analysisResult?.isochrones) return;
+    const key = JSON.stringify(state.analysisResult.isochrones).slice(0, 100);
+    if (key === prevIso.current) return;
+    prevIso.current = key;
+    try {
+      const geoLayer = L.geoJSON(state.analysisResult.isochrones);
+      const bounds = geoLayer.getBounds();
+      if (bounds.isValid()) {
+        map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
+      }
+    } catch {}
+  }, [state.analysisResult?.isochrones, map]);
+
+  return null;
+}
+
 function MapClickHandler() {
   const { state, dispatch } = useAppState();
   useMapEvents({
@@ -61,27 +92,31 @@ function MapClickHandler() {
   return null;
 }
 
-// Clustered facility markers using leaflet.markercluster
 function ClusteredFacilityMarkers({ facilities }: { facilities: Facility[] }) {
   const map = useMap();
   const clusterRef = useRef<L.MarkerClusterGroup | null>(null);
 
   useEffect(() => {
-    if (clusterRef.current) {
-      map.removeLayer(clusterRef.current);
-    }
+    if (clusterRef.current) map.removeLayer(clusterRef.current);
     const cluster = (L as any).markerClusterGroup({
       maxClusterRadius: 50,
       spiderfyOnMaxZoom: true,
       showCoverageOnHover: false,
       zoomToBoundsOnClick: true,
-      disableClusteringAtZoom: 16,
+      disableClusteringAtZoom: 14,
+      iconCreateFunction: (c: any) => {
+        const count = c.getChildCount();
+        return L.divIcon({
+          html: `<div style="width:36px;height:36px;display:flex;align-items:center;justify-content:center;background:hsl(210,80%,45%);color:white;border-radius:50%;font-size:12px;font-weight:600;box-shadow:0 2px 6px rgba(0,0,0,0.2);border:2px solid white;">${count}</div>`,
+          className: '',
+          iconSize: [36, 36],
+          iconAnchor: [18, 18],
+        });
+      },
     });
 
     facilities.forEach((f) => {
-      const marker = L.marker([f.lat, f.lon], {
-        icon: createFacilityIcon(f.type, f.isSimulated),
-      });
+      const marker = L.marker([f.lat, f.lon], { icon: createFacilityIcon(f.type, f.isSimulated) });
       marker.bindPopup(
         `<div style="font-size:13px"><strong>${f.name}</strong><br/><span style="text-transform:capitalize">${f.type}${f.isSimulated ? ' (Simulated)' : ''}</span><br/><code>${f.lat.toFixed(4)}, ${f.lon.toFixed(4)}</code></div>`
       );
@@ -90,39 +125,10 @@ function ClusteredFacilityMarkers({ facilities }: { facilities: Facility[] }) {
 
     map.addLayer(cluster);
     clusterRef.current = cluster;
-
-    return () => {
-      if (clusterRef.current) {
-        map.removeLayer(clusterRef.current);
-      }
-    };
+    return () => { if (clusterRef.current) map.removeLayer(clusterRef.current); };
   }, [facilities, map]);
 
   return null;
-}
-
-function PopulationHeatmap({ points }: { points: PopulationPoint[] }) {
-  const maxPop = useMemo(() => Math.max(...points.map(p => p.population), 1), [points]);
-  return (
-    <>
-      {points.map((p, i) => {
-        const intensity = p.population / maxPop;
-        return (
-          <CircleMarker
-            key={`pop-${i}`}
-            center={[p.lat, p.lon]}
-            radius={6}
-            pathOptions={{
-              color: 'transparent',
-              fillColor: intensity > 0.7 ? '#ef4444' : intensity > 0.4 ? '#f59e0b' : '#22c55e',
-              fillOpacity: 0.08 + intensity * 0.22,
-              weight: 0,
-            }}
-          />
-        );
-      })}
-    </>
-  );
 }
 
 function OptimizationMarkers() {
@@ -134,13 +140,7 @@ function OptimizationMarkers() {
           key={`opt-${i}`}
           center={[opt.lat, opt.lon]}
           radius={12}
-          pathOptions={{
-            color: 'hsl(270, 60%, 55%)',
-            fillColor: 'hsl(270, 60%, 55%)',
-            fillOpacity: 0.2,
-            weight: 2,
-            dashArray: '4,6',
-          }}
+          pathOptions={{ color: 'hsl(270, 60%, 55%)', fillColor: 'hsl(270, 60%, 55%)', fillOpacity: 0.2, weight: 2, dashArray: '4,6' }}
         >
           <Popup>
             <div className="text-sm space-y-1">
@@ -159,11 +159,7 @@ function AnalysisPointMarker() {
   const { state } = useAppState();
   if (!state.analysisPoint) return null;
   return (
-    <CircleMarker
-      center={state.analysisPoint}
-      radius={8}
-      pathOptions={{ color: 'hsl(210, 80%, 45%)', fillColor: 'hsl(210, 80%, 45%)', fillOpacity: 0.3, weight: 3 }}
-    >
+    <Marker position={state.analysisPoint} icon={selectedLocationIcon}>
       <Popup>
         <div className="text-sm">
           <div className="font-semibold">📍 Selected Location</div>
@@ -172,15 +168,14 @@ function AnalysisPointMarker() {
           </div>
         </div>
       </Popup>
-    </CircleMarker>
+    </Marker>
   );
 }
 
-const isochroneColors = ['#fbbf2480', '#f5970080', '#ef444480'];
-const isochroneBorders = ['#fbbf24', '#f59700', '#ef4444'];
+const isochroneColors = ['rgba(250, 204, 21, 0.18)', 'rgba(249, 115, 22, 0.18)', 'rgba(239, 68, 68, 0.18)'];
+const isochroneBorders = ['#facc15', '#f97316', '#ef4444'];
 
-function BasemapSwitcher() {
-  const [basemap, setBasemap] = useState<keyof typeof BASEMAPS>('positron');
+function BasemapSwitcher({ basemap, setBasemap }: { basemap: keyof typeof BASEMAPS; setBasemap: (b: keyof typeof BASEMAPS) => void }) {
   const map = useMap();
   const layerRef = useRef<L.TileLayer | null>(null);
 
@@ -193,27 +188,73 @@ function BasemapSwitcher() {
     return () => { if (layerRef.current) map.removeLayer(layerRef.current); };
   }, [basemap, map]);
 
+  return null;
+}
+
+// Floating map control panel
+function FloatingMapControl() {
+  const { state, dispatch } = useAppState();
+  const [open, setOpen] = useState(false);
+  const [basemap, setBasemap] = useState<keyof typeof BASEMAPS>('positron');
+
   return (
-    <div className="leaflet-bottom leaflet-left" style={{ zIndex: 1000 }}>
-      <div className="leaflet-control bg-card border border-border rounded-md shadow-sm p-1 flex gap-1 mb-6 ml-2">
-        {(Object.keys(BASEMAPS) as (keyof typeof BASEMAPS)[]).map((key) => (
-          <button
-            key={key}
-            onClick={() => setBasemap(key)}
-            className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
-              basemap === key ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            {BASEMAPS[key].label}
-          </button>
-        ))}
+    <>
+      <BasemapSwitcher basemap={basemap} setBasemap={setBasemap} />
+      <div className="absolute top-3 right-3 z-[1000]">
+        <button
+          onClick={() => setOpen(!open)}
+          className="w-9 h-9 bg-card border border-border rounded-lg shadow-md flex items-center justify-center hover:bg-secondary transition-colors"
+        >
+          <Layers className="w-4 h-4 text-foreground" />
+        </button>
+
+        {open && (
+          <div className="mt-2 bg-card border border-border rounded-lg shadow-lg p-3 min-w-[180px] space-y-3">
+            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Layers</div>
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input
+                type="checkbox"
+                checked={state.showFacilities}
+                onChange={() => dispatch({ type: 'TOGGLE_LAYER', payload: 'showFacilities' })}
+                className="rounded border-border"
+              />
+              Facilities
+            </label>
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input
+                type="checkbox"
+                checked={state.showIsochrones}
+                onChange={() => dispatch({ type: 'TOGGLE_LAYER', payload: 'showIsochrones' })}
+                className="rounded border-border"
+              />
+              Isochrones
+            </label>
+
+            <div className="border-t border-border pt-2 mt-2">
+              <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Basemap</div>
+              <div className="flex gap-1">
+                {(Object.keys(BASEMAPS) as (keyof typeof BASEMAPS)[]).map((key) => (
+                  <button
+                    key={key}
+                    onClick={() => setBasemap(key)}
+                    className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
+                      basemap === key ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {BASEMAPS[key].label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
-    </div>
+    </>
   );
 }
 
 export function HealthMap() {
-  const { state } = useAppState();
+  const { state, dispatch } = useAppState();
   const mapRef = useRef<L.Map | null>(null);
 
   const allFacilities = useMemo(
@@ -236,9 +277,9 @@ export function HealthMap() {
         />
         <MapUpdater />
         <MapClickHandler />
-        <BasemapSwitcher />
+        <IsochroneFitter />
 
-        {/* Isochrones */}
+        {/* Isochrones — rendered below facilities */}
         {state.showIsochrones && state.analysisResult?.isochrones && (
           <GeoJSON
             key={JSON.stringify(state.analysisResult.isochrones).slice(0, 100)}
@@ -249,15 +290,10 @@ export function HealthMap() {
                 fillColor: isochroneColors[idx] || isochroneColors[0],
                 color: isochroneBorders[idx] || isochroneBorders[0],
                 weight: 2,
-                fillOpacity: 0.25,
+                fillOpacity: 0.18,
               };
             }}
           />
-        )}
-
-        {/* Population (OFF by default) */}
-        {state.showPopulation && state.populationGrid.length > 0 && (
-          <PopulationHeatmap points={state.populationGrid} />
         )}
 
         {/* Facilities with clustering */}
@@ -265,10 +301,7 @@ export function HealthMap() {
           <ClusteredFacilityMarkers facilities={allFacilities} />
         )}
 
-        {/* Optimization */}
         <OptimizationMarkers />
-
-        {/* Selected location marker */}
         <AnalysisPointMarker />
 
         {/* Route */}
@@ -280,6 +313,22 @@ export function HealthMap() {
           />
         )}
       </MapContainer>
+
+      {/* Floating map controls */}
+      <FloatingMapControl />
+
+      {/* Reset button — only when there's an analysis */}
+      {(state.analysisResult || state.analysisPoint) && (
+        <div className="absolute top-3 right-14 z-[1000]">
+          <button
+            onClick={() => dispatch({ type: 'RESET_ANALYSIS' })}
+            className="w-9 h-9 bg-card border border-border rounded-lg shadow-md flex items-center justify-center hover:bg-destructive/10 hover:border-destructive/30 transition-colors"
+            title="Reset Analysis"
+          >
+            <RotateCcw className="w-4 h-4 text-muted-foreground" />
+          </button>
+        </div>
+      )}
 
       {/* Loading overlay */}
       {state.isAnalyzing && (

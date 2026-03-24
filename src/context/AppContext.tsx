@@ -33,7 +33,8 @@ type Action =
   | { type: 'SET_ACTIVE_SCENARIO'; payload: string | null }
   | { type: 'SET_OPTIMIZATION'; payload: OptimizationResult[] }
   | { type: 'SET_ROUTE'; payload: any }
-  | { type: 'SET_SEARCH_RADIUS'; payload: number };
+  | { type: 'SET_SEARCH_RADIUS'; payload: number }
+  | { type: 'RESET_ANALYSIS' };
 
 const initialState: State = {
   center: [-1.2921, 36.8219], // Nairobi
@@ -81,6 +82,7 @@ function reducer(state: State, action: Action): State {
     case 'SET_OPTIMIZATION': return { ...state, optimizationResults: action.payload };
     case 'SET_ROUTE': return { ...state, routeGeoJson: action.payload };
     case 'SET_SEARCH_RADIUS': return { ...state, searchRadius: action.payload };
+    case 'RESET_ANALYSIS': return { ...state, analysisPoint: null, analysisResult: null, facilities: [], populationGrid: [], optimizationResults: [], routeGeoJson: null };
     default: return state;
   }
 }
