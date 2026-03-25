@@ -54,7 +54,7 @@ const initialState: State = {
   distanceThresholds: [1000, 2000, 3000, 4000, 5000, 6000], // 1-6 km in meters
   speed: 5, // km/h for walking
   searchRadius: 10000,
-  activeTab: 'summary',
+  activeTab: 'settings',
   isAnalyzing: false,
   showFacilities: true,
   showIsochrones: true,
