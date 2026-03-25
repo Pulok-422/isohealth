@@ -10,7 +10,7 @@ import { Layers, RotateCcw } from 'lucide-react';
 import { MapLegend } from '@/components/MapLegend';
 import type { Facility } from '@/types/health';
 
-// 6-band isochrone colors (yellow → red → dark red)
+// 6-band isochrone colors
 const ISOCHRONE_COLORS = [
   '#fff59d',
   '#ffe082',
@@ -238,11 +238,6 @@ function AnalysisPointMarker() {
   );
 }
 
-/**
- * Render isochrones band-by-band instead of a single GeoJSON block.
- * This improves visible band separation even when the backend returns
- * cumulative nested polygons.
- */
 function SortedIsochrones({ data }: { data: any }) {
   const { featuresDesc, ascValues } = useMemo(() => {
     if (!data?.features?.length) {
@@ -306,6 +301,76 @@ function SortedIsochrones({ data }: { data: any }) {
   );
 }
 
+/* ---------- point-in-polygon helpers ---------- */
+
+function pointInRing(point: [number, number], ring: number[][]) {
+  const [x, y] = point;
+  let inside = false;
+
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0];
+    const yi = ring[i][1];
+    const xj = ring[j][0];
+    const yj = ring[j][1];
+
+    const intersect =
+      yi > y !== yj > y &&
+      x < ((xj - xi) * (y - yi)) / ((yj - yi) || Number.EPSILON) + xi;
+
+    if (intersect) inside = !inside;
+  }
+
+  return inside;
+}
+
+function pointInPolygonCoords(point: [number, number], polygonCoords: number[][][]) {
+  if (!polygonCoords?.length) return false;
+
+  const outerRing = polygonCoords[0];
+  if (!pointInRing(point, outerRing)) return false;
+
+  for (let i = 1; i < polygonCoords.length; i++) {
+    if (pointInRing(point, polygonCoords[i])) return false;
+  }
+
+  return true;
+}
+
+function pointInGeometry(point: [number, number], geometry: any) {
+  if (!geometry) return false;
+
+  if (geometry.type === 'Polygon') {
+    return pointInPolygonCoords(point, geometry.coordinates);
+  }
+
+  if (geometry.type === 'MultiPolygon') {
+    return geometry.coordinates.some((polygonCoords: number[][][]) =>
+      pointInPolygonCoords(point, polygonCoords)
+    );
+  }
+
+  return false;
+}
+
+function getOutermostIsochroneGeometry(isochrones: any) {
+  const features = isochrones?.features;
+  if (!features?.length) return null;
+
+  const validFeatures = features.filter(
+    (f: any) => f?.geometry && f?.properties?.value != null
+  );
+
+  if (!validFeatures.length) return null;
+
+  const outermost = validFeatures.reduce((maxFeature: any, current: any) => {
+    const maxValue = Number(maxFeature?.properties?.value ?? -Infinity);
+    const currentValue = Number(current?.properties?.value ?? -Infinity);
+    return currentValue > maxValue ? current : maxFeature;
+  });
+
+  return outermost?.geometry ?? null;
+}
+
 function BasemapSwitcher({ basemap }: { basemap: keyof typeof BASEMAPS }) {
   const map = useMap();
   const layerRef = useRef<L.TileLayer | null>(null);
@@ -326,7 +391,6 @@ function BasemapSwitcher({ basemap }: { basemap: keyof typeof BASEMAPS }) {
   return null;
 }
 
-// Store basemap state at module level so floating control outside MapContainer can sync
 let _setBasemapFn: ((b: keyof typeof BASEMAPS) => void) | null = null;
 let _currentBasemap: keyof typeof BASEMAPS = 'positron';
 
@@ -420,6 +484,16 @@ export function HealthMap() {
     [state.facilities, state.simulatedFacilities]
   );
 
+  const visibleFacilities = useMemo(() => {
+    const isochroneGeometry = getOutermostIsochroneGeometry(state.analysisResult?.isochrones);
+
+    if (!isochroneGeometry) return allFacilities;
+
+    return allFacilities.filter((facility) =>
+      pointInGeometry([facility.lon, facility.lat], isochroneGeometry)
+    );
+  }, [allFacilities, state.analysisResult?.isochrones]);
+
   return (
     <div className="relative w-full h-full">
       <MapContainer
@@ -443,8 +517,8 @@ export function HealthMap() {
           <SortedIsochrones data={state.analysisResult.isochrones} />
         )}
 
-        {state.showFacilities && allFacilities.length > 0 && (
-          <ClusteredFacilityMarkers facilities={allFacilities} />
+        {state.showFacilities && visibleFacilities.length > 0 && (
+          <ClusteredFacilityMarkers facilities={visibleFacilities} />
         )}
 
         <OptimizationMarkers />
