@@ -1,23 +1,14 @@
-import { Search, Car, Bike, Footprints, Play, Loader2, Plus, MapPin, LogIn, User, LayoutDashboard, Shield, LogOut, RotateCcw } from 'lucide-react';
-import { useState, useCallback, useRef } from 'react';
+import { Search, Plus, MapPin, LogIn, User, LayoutDashboard, Shield, LogOut } from 'lucide-react';
+import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppState } from '@/context/AppContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { useAnalysis } from '@/hooks/useAnalysis';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
-import type { TransportProfile } from '@/types/health';
 import { toast } from 'sonner';
 
-const transportModes: { id: TransportProfile; icon: typeof Car; label: string }[] = [
-  { id: 'foot-walking', icon: Footprints, label: 'Walk' },
-  { id: 'driving-car', icon: Car, label: 'Drive' },
-  { id: 'cycling-regular', icon: Bike, label: 'Cycle' },
-];
-
 export function TopBar() {
-  const { state, dispatch } = useAppState();
-  const { runAnalysis } = useAnalysis();
+  const { dispatch } = useAppState();
   const { user, signOut, isAdmin } = useAuth();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
@@ -36,7 +27,7 @@ export function TopBar() {
         dispatch({ type: 'SET_CENTER', payload: [latNum, lonNum] });
         dispatch({ type: 'SET_ZOOM', payload: 13 });
         dispatch({ type: 'SET_ANALYSIS_POINT', payload: [latNum, lonNum] });
-        toast.success('Location selected — click Analyze to run');
+        toast.success('Location selected — configure settings and click Analyze');
       }
     } catch {
       toast.error('Search failed');
@@ -94,54 +85,7 @@ export function TopBar() {
         <span className="hidden lg:inline">My Location</span>
       </Button>
 
-      {/* Transport Mode */}
-      <div className="flex items-center gap-1 bg-secondary rounded-md p-0.5">
-        {transportModes.map(({ id, icon: Icon, label }) => (
-          <button
-            key={id}
-            onClick={() => dispatch({ type: 'SET_TRANSPORT', payload: id })}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium transition-colors ${
-              state.transportProfile === id
-                ? 'bg-primary/10 text-primary'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-            title={label}
-          >
-            <Icon className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">{label}</span>
-          </button>
-        ))}
-      </div>
-
-      {/* Analyze */}
-      <Button
-        size="sm"
-        onClick={() => {
-          if (state.analysisPoint) {
-            runAnalysis(state.analysisPoint[0], state.analysisPoint[1]);
-          } else {
-            runAnalysis(state.center[0], state.center[1]);
-          }
-        }}
-        disabled={state.isAnalyzing}
-        className="gap-1.5"
-      >
-        {state.isAnalyzing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
-        <span className="hidden sm:inline">Analyze</span>
-      </Button>
-
-      {/* Simulate */}
-      <button
-        onClick={() => dispatch({ type: 'SET_SIMULATION_MODE', payload: !state.simulationMode })}
-        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors border ${
-          state.simulationMode
-            ? 'border-accent/50 bg-accent/10 text-accent-foreground'
-            : 'border-border text-muted-foreground hover:text-foreground'
-        }`}
-      >
-        <Plus className="w-3.5 h-3.5" />
-        <span className="hidden sm:inline">Simulate</span>
-      </button>
+      <div className="flex-1" />
 
       {/* User Menu */}
       {user ? (

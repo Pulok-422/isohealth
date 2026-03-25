@@ -1,5 +1,6 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAppState } from '@/context/AppContext';
+import { AnalysisSettings } from './AnalysisSettings';
 import { SummaryTab } from './panels/SummaryTab';
 import { FacilitiesTab } from './panels/FacilitiesTab';
 import { SimulationTab } from './panels/SimulationTab';
@@ -7,6 +8,7 @@ import { OptimizationTab } from './panels/OptimizationTab';
 import { ExportTab } from './panels/ExportTab';
 
 const tabs = [
+  { id: 'settings', label: 'Settings' },
   { id: 'summary', label: 'Summary' },
   { id: 'facilities', label: 'Facilities' },
   { id: 'simulation', label: 'Simulation' },
@@ -19,7 +21,6 @@ export function AnalyticsPanel() {
 
   return (
     <div className="h-full flex flex-col bg-card/50 backdrop-blur-xl border-l border-border">
-      {/* Tabs */}
       <div className="flex items-center gap-1 px-3 py-2 border-b border-border overflow-x-auto">
         {tabs.map((tab) => (
           <button
@@ -34,8 +35,7 @@ export function AnalyticsPanel() {
         ))}
       </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto p-3">
+      <div className="flex-1 overflow-y-auto">
         <AnimatePresence mode="wait">
           <motion.div
             key={state.activeTab}
@@ -44,6 +44,7 @@ export function AnalyticsPanel() {
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.15 }}
           >
+            {state.activeTab === 'settings' && <AnalysisSettings />}
             {state.activeTab === 'summary' && <SummaryTab />}
             {state.activeTab === 'facilities' && <FacilitiesTab />}
             {state.activeTab === 'simulation' && <SimulationTab />}

@@ -6,10 +6,21 @@ import 'leaflet.markercluster/dist/MarkerCluster.css';
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
 import 'leaflet.markercluster';
 import { useAppState } from '@/context/AppContext';
-import { Layers, MapPin, Eye, EyeOff, RotateCcw } from 'lucide-react';
-import type { Facility, PopulationPoint } from '@/types/health';
+import { Layers, RotateCcw } from 'lucide-react';
+import { MapLegend } from '@/components/MapLegend';
+import type { Facility } from '@/types/health';
 
-// Facility icon — emoji at high zoom, simple dot at low zoom
+// 6-band isochrone colors (yellow → red → dark red)
+const ISOCHRONE_COLORS = [
+  'rgba(255, 245, 157, 0.60)',
+  'rgba(255, 224, 130, 0.60)',
+  'rgba(255, 183, 77, 0.60)',
+  'rgba(255, 138, 101, 0.60)',
+  'rgba(239, 83, 80, 0.60)',
+  'rgba(173, 20, 87, 0.60)',
+];
+const ISOCHRONE_BORDERS = ['#fff59d', '#ffe082', '#ffb74d', '#ff8a65', '#ef5350', '#ad1457'];
+
 function createFacilityIcon(type: string, isSimulated: boolean = false) {
   const icons: Record<string, string> = {
     hospital: '🏥', clinic: '🏨', pharmacy: '💊', doctors: '👨‍⚕️', healthcare: '⚕️',
@@ -24,7 +35,6 @@ function createFacilityIcon(type: string, isSimulated: boolean = false) {
   });
 }
 
-// Selected location pin icon
 const selectedLocationIcon = L.divIcon({
   html: `<div style="width:20px;height:20px;background:hsl(210,80%,45%);border:3px solid white;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,0.3);"></div>`,
   className: '',
@@ -45,7 +55,6 @@ function MapUpdater() {
   return null;
 }
 
-// Fit map to isochrone bounds after analysis
 function IsochroneFitter() {
   const { state } = useAppState();
   const map = useMap();
@@ -172,10 +181,45 @@ function AnalysisPointMarker() {
   );
 }
 
-const isochroneColors = ['rgba(250, 204, 21, 0.18)', 'rgba(249, 115, 22, 0.18)', 'rgba(239, 68, 68, 0.18)'];
-const isochroneBorders = ['#facc15', '#f97316', '#ef4444'];
+/**
+ * Sort isochrone features largest-first so inner bands render on top.
+ * Color by sorted ascending value index.
+ */
+function SortedIsochrones({ data }: { data: any }) {
+  const sortedData = useMemo(() => {
+    if (!data?.features?.length) return data;
+    const features = [...data.features];
+    // Sort descending by value so largest polygon renders first (bottom)
+    features.sort((a: any, b: any) => (b.properties?.value || 0) - (a.properties?.value || 0));
 
-function BasemapSwitcher({ basemap, setBasemap }: { basemap: keyof typeof BASEMAPS; setBasemap: (b: keyof typeof BASEMAPS) => void }) {
+    // Build ascending value list for color mapping
+    const ascValues = [...new Set(features.map((f: any) => f.properties?.value))].sort((a: any, b: any) => a - b);
+
+    return { ...data, features, _ascValues: ascValues };
+  }, [data]);
+
+  const ascValues = sortedData._ascValues || [];
+
+  return (
+    <GeoJSON
+      key={JSON.stringify(ascValues)}
+      data={{ ...sortedData, features: sortedData.features }}
+      style={(feature) => {
+        const val = feature?.properties?.value;
+        const idx = ascValues.indexOf(val);
+        const colorIdx = idx >= 0 ? Math.min(idx, ISOCHRONE_COLORS.length - 1) : 0;
+        return {
+          fillColor: ISOCHRONE_COLORS[colorIdx],
+          color: ISOCHRONE_BORDERS[colorIdx],
+          weight: 1.5,
+          fillOpacity: 0.45,
+        };
+      }}
+    />
+  );
+}
+
+function BasemapSwitcher({ basemap }: { basemap: keyof typeof BASEMAPS }) {
   const map = useMap();
   const layerRef = useRef<L.TileLayer | null>(null);
 
@@ -191,7 +235,6 @@ function BasemapSwitcher({ basemap, setBasemap }: { basemap: keyof typeof BASEMA
   return null;
 }
 
-// Floating map control panel
 function FloatingMapControl() {
   const { state, dispatch } = useAppState();
   const [open, setOpen] = useState(false);
@@ -199,7 +242,7 @@ function FloatingMapControl() {
 
   return (
     <>
-      <BasemapSwitcher basemap={basemap} setBasemap={setBasemap} />
+      <BasemapSwitcher basemap={basemap} />
       <div className="absolute top-3 right-3 z-[1000]">
         <button
           onClick={() => setOpen(!open)}
@@ -212,21 +255,11 @@ function FloatingMapControl() {
           <div className="mt-2 bg-card border border-border rounded-lg shadow-lg p-3 min-w-[180px] space-y-3">
             <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Layers</div>
             <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <input
-                type="checkbox"
-                checked={state.showFacilities}
-                onChange={() => dispatch({ type: 'TOGGLE_LAYER', payload: 'showFacilities' })}
-                className="rounded border-border"
-              />
+              <input type="checkbox" checked={state.showFacilities} onChange={() => dispatch({ type: 'TOGGLE_LAYER', payload: 'showFacilities' })} className="rounded border-border" />
               Facilities
             </label>
             <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <input
-                type="checkbox"
-                checked={state.showIsochrones}
-                onChange={() => dispatch({ type: 'TOGGLE_LAYER', payload: 'showIsochrones' })}
-                className="rounded border-border"
-              />
+              <input type="checkbox" checked={state.showIsochrones} onChange={() => dispatch({ type: 'TOGGLE_LAYER', payload: 'showIsochrones' })} className="rounded border-border" />
               Isochrones
             </label>
 
@@ -279,24 +312,11 @@ export function HealthMap() {
         <MapClickHandler />
         <IsochroneFitter />
 
-        {/* Isochrones — rendered below facilities */}
+        {/* Isochrones — sorted rendering */}
         {state.showIsochrones && state.analysisResult?.isochrones && (
-          <GeoJSON
-            key={JSON.stringify(state.analysisResult.isochrones).slice(0, 100)}
-            data={state.analysisResult.isochrones}
-            style={(feature) => {
-              const idx = feature?.properties?.group_index || 0;
-              return {
-                fillColor: isochroneColors[idx] || isochroneColors[0],
-                color: isochroneBorders[idx] || isochroneBorders[0],
-                weight: 2,
-                fillOpacity: 0.18,
-              };
-            }}
-          />
+          <SortedIsochrones data={state.analysisResult.isochrones} />
         )}
 
-        {/* Facilities with clustering */}
         {state.showFacilities && allFacilities.length > 0 && (
           <ClusteredFacilityMarkers facilities={allFacilities} />
         )}
@@ -304,7 +324,6 @@ export function HealthMap() {
         <OptimizationMarkers />
         <AnalysisPointMarker />
 
-        {/* Route */}
         {state.routeGeoJson && (
           <GeoJSON
             key={`route-${Date.now()}`}
@@ -314,10 +333,9 @@ export function HealthMap() {
         )}
       </MapContainer>
 
-      {/* Floating map controls */}
       <FloatingMapControl />
+      <MapLegend />
 
-      {/* Reset button — only when there's an analysis */}
       {(state.analysisResult || state.analysisPoint) && (
         <div className="absolute top-3 right-14 z-[1000]">
           <button
@@ -330,7 +348,6 @@ export function HealthMap() {
         </div>
       )}
 
-      {/* Loading overlay */}
       {state.isAnalyzing && (
         <div className="absolute inset-0 bg-background/40 backdrop-blur-sm flex items-center justify-center z-[1000]">
           <div className="glass-panel p-6 flex flex-col items-center gap-3">
@@ -340,7 +357,6 @@ export function HealthMap() {
         </div>
       )}
 
-      {/* Simulation mode indicator */}
       {state.simulationMode && (
         <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1000]">
           <div className="glass-panel px-4 py-2 border-accent/30 bg-accent/5">
@@ -351,15 +367,14 @@ export function HealthMap() {
         </div>
       )}
 
-      {/* Onboarding helper */}
       {!state.analysisResult && !state.isAnalyzing && (
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-[1000]">
           <div className="glass-panel px-5 py-3 shadow-md">
             <div className="text-xs text-muted-foreground space-y-1">
               <p className="font-medium text-foreground text-sm">Get Started</p>
               <p>1. Select a location (search, click map, or use My Location)</p>
-              <p>2. Choose a travel mode (Walk, Drive, Cycle)</p>
-              <p>3. Click <span className="text-primary font-medium">Analyze</span> to see results</p>
+              <p>2. Configure analysis settings in the right panel</p>
+              <p>3. Click <span className="text-primary font-medium">Analyze Accessibility</span></p>
             </div>
           </div>
         </div>
