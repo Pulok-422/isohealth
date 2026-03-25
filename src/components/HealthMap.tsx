@@ -320,6 +320,7 @@ export function HealthMap() {
           attribution='&copy; <a href="https://carto.com/">CARTO</a>'
           url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
         />
+        <BasemapSyncInMap />
         <MapUpdater />
         <MapClickHandler />
         <IsochroneFitter />
