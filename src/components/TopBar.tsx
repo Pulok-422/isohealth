@@ -1,14 +1,15 @@
 import {
   Search,
-  Plus,
   MapPin,
   LogIn,
   User,
   LayoutDashboard,
   Shield,
   LogOut,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppState } from '@/context/AppContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -26,7 +27,23 @@ export function TopBar() {
   const { dispatch } = useAppState();
   const { user, signOut, isAdmin } = useAuth();
   const navigate = useNavigate();
+
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth >= 1024) {
+        setSearchOpen(true);
+      } else {
+        setSearchOpen(false);
+      }
+    };
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const handleSearch = useCallback(async () => {
     if (!searchQuery.trim()) return;
@@ -81,95 +98,128 @@ export function TopBar() {
   };
 
   return (
-    <header className="h-16 bg-[#1773cf] border-b border-[#1567b9] flex items-center px-4 md:px-5 gap-3 shadow-sm z-50">
-      {/* Left: Brand */}
-      <div className="flex items-center gap-3 shrink-0 min-w-fit">
-        <div className="w-9 h-9 rounded-xl bg-white/95 flex items-center justify-center shadow-sm">
-          <Plus className="w-4 h-4 text-[#1773cf]" />
+    <header className="bg-[#1773cf] border-b border-[#1567b9] shadow-sm z-50">
+      <div className="h-16 px-3 md:px-5 flex items-center gap-3">
+        {/* Left: Brand */}
+        <div className="flex items-center gap-3 shrink-0 min-w-fit">
+          <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center shadow-sm overflow-hidden">
+            <img
+              src="/iso (2).png"
+              alt="iso-Health logo"
+              className="w-8 h-8 object-contain"
+            />
+          </div>
+
+          <div className="flex flex-col leading-none">
+            <span className="text-[15px] md:text-base font-semibold tracking-tight text-white">
+              iso-Health
+            </span>
+            <span className="text-[11px] text-white/75 hidden md:block">
+              Accessibility Mapping
+            </span>
+          </div>
         </div>
 
-        <div className="flex flex-col leading-none">
-          <span className="text-[15px] md:text-base font-semibold tracking-tight text-white">
-            iso-Health
-          </span>
-          <span className="text-[11px] text-white/75 hidden md:block">
-            Accessibility Mapping
-          </span>
-        </div>
-      </div>
+        {/* Center spacer */}
+        <div className="flex-1" />
 
-      {/* Center: Search */}
-      <div className="flex-1 flex justify-center min-w-0">
-        <div className="w-full max-w-2xl relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search location (e.g., Nairobi, Lagos)..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyDown={handleKeyDown}
-            className="w-full h-11 pl-10 pr-4 bg-white border border-white/70 rounded-xl text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-white/60"
-          />
-        </div>
-      </div>
+        {/* Search toggle button */}
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => setSearchOpen((prev) => !prev)}
+            className="h-10 px-3 rounded-xl bg-white/10 text-white hover:bg-white/15 border border-white/20 shadow-none gap-2"
+          >
+            <Search className="w-4 h-4" />
+            <span className="hidden sm:inline">Search</span>
+            {searchOpen ? (
+              <ChevronUp className="w-4 h-4 hidden sm:inline" />
+            ) : (
+              <ChevronDown className="w-4 h-4 hidden sm:inline" />
+            )}
+          </Button>
 
-      {/* Right: Actions */}
-      <div className="flex items-center gap-2 shrink-0">
-        <Button
-          size="sm"
-          onClick={handleUseMyLocation}
-          className="h-10 px-4 rounded-xl bg-white text-[#1773cf] hover:bg-white/90 border-0 shadow-none hidden sm:inline-flex gap-2"
-        >
-          <MapPin className="w-4 h-4" />
-          <span className="hidden lg:inline">My Location</span>
-        </Button>
-
-        {user ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                size="sm"
-                className="h-10 px-3 rounded-xl bg-white/10 text-white hover:bg-white/15 border border-white/20 shadow-none gap-2"
-              >
-                <User className="w-4 h-4" />
-                <span className="hidden md:inline max-w-[110px] truncate">
-                  {user.email?.split('@')[0]}
-                </span>
-              </Button>
-            </DropdownMenuTrigger>
-
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem onClick={() => navigate('/dashboard')}>
-                <LayoutDashboard className="w-4 h-4 mr-2" />
-                Dashboard
-              </DropdownMenuItem>
-
-              {isAdmin && (
-                <DropdownMenuItem onClick={() => navigate('/admin')}>
-                  <Shield className="w-4 h-4 mr-2" />
-                  Admin Panel
-                </DropdownMenuItem>
-              )}
-
-              <DropdownMenuSeparator />
-
-              <DropdownMenuItem onClick={signOut}>
-                <LogOut className="w-4 h-4 mr-2" />
-                Sign Out
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : (
           <Button
             size="sm"
-            onClick={() => navigate('/auth')}
-            className="h-10 px-4 rounded-xl bg-white/10 text-white hover:bg-white/15 border border-white/20 shadow-none gap-2"
+            onClick={handleUseMyLocation}
+            className="h-10 px-3 md:px-4 rounded-xl bg-white text-[#1773cf] hover:bg-white/90 border-0 shadow-none gap-2"
           >
-            <LogIn className="w-4 h-4" />
-            <span className="hidden md:inline">Sign In</span>
+            <MapPin className="w-4 h-4" />
+            <span className="hidden md:inline">My Location</span>
           </Button>
-        )}
+
+          {user ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  size="sm"
+                  className="h-10 px-3 rounded-xl bg-white/10 text-white hover:bg-white/15 border border-white/20 shadow-none gap-2"
+                >
+                  <User className="w-4 h-4" />
+                  <span className="hidden md:inline max-w-[110px] truncate">
+                    {user.email?.split('@')[0]}
+                  </span>
+                </Button>
+              </DropdownMenuTrigger>
+
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem onClick={() => navigate('/dashboard')}>
+                  <LayoutDashboard className="w-4 h-4 mr-2" />
+                  Dashboard
+                </DropdownMenuItem>
+
+                {isAdmin && (
+                  <DropdownMenuItem onClick={() => navigate('/admin')}>
+                    <Shield className="w-4 h-4 mr-2" />
+                    Admin Panel
+                  </DropdownMenuItem>
+                )}
+
+                <DropdownMenuSeparator />
+
+                <DropdownMenuItem onClick={signOut}>
+                  <LogOut className="w-4 h-4 mr-2" />
+                  Sign Out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <Button
+              size="sm"
+              onClick={() => navigate('/auth')}
+              className="h-10 px-3 md:px-4 rounded-xl bg-white/10 text-white hover:bg-white/15 border border-white/20 shadow-none gap-2"
+            >
+              <LogIn className="w-4 h-4" />
+              <span className="hidden md:inline">Sign In</span>
+            </Button>
+          )}
+        </div>
       </div>
+
+      {/* Collapsible search area */}
+      {searchOpen && (
+        <div className="px-3 md:px-5 pb-3">
+          <div className="max-w-3xl mx-auto relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search location (e.g., Nairobi, Lagos)..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={handleKeyDown}
+              className="w-full h-11 pl-10 pr-24 bg-white border border-white/70 rounded-xl text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-white/60"
+            />
+            <button
+              type="button"
+              onClick={handleSearch}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 h-8 px-3 rounded-lg bg-[#1773cf] text-white text-sm font-medium hover:bg-[#1567b9] transition-colors"
+            >
+              Go
+            </button>
+          </div>
+        </div>
+      )}
     </header>
   );
 }
