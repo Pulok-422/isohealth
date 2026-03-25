@@ -235,10 +235,7 @@ function BasemapSwitcher({ basemap }: { basemap: keyof typeof BASEMAPS }) {
   return null;
 }
 
-function InternalBasemapSwitcher() {
-  const [basemap, setBasemap] = useState<keyof typeof BASEMAPS>('positron');
-  return <BasemapSwitcher basemap={basemap} />;
-}
+
 
 // Store basemap state at module level so floating control outside MapContainer can sync
 let _setBasemapFn: ((b: keyof typeof BASEMAPS) => void) | null = null;
