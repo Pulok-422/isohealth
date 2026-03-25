@@ -1,6 +1,5 @@
 import { createContext, useContext, useReducer, type ReactNode } from 'react';
-import type { AppState, Facility, AnalysisResult, Scenario, TransportProfile, OptimizationResult } from '@/types/health';
-import type { PopulationPoint } from '@/types/health';
+import type { AppState, Facility, AnalysisResult, Scenario, TransportProfile, AnalysisType, OptimizationResult, PopulationPoint } from '@/types/health';
 
 interface State extends AppState {
   facilities: Facility[];
@@ -13,12 +12,21 @@ interface State extends AppState {
   routeGeoJson: any;
 }
 
+const DEFAULT_SPEEDS: Record<TransportProfile, number> = {
+  'foot-walking': 5,
+  'cycling-regular': 15,
+  'driving-car': 40,
+};
+
 type Action =
   | { type: 'SET_CENTER'; payload: [number, number] }
   | { type: 'SET_ZOOM'; payload: number }
   | { type: 'SET_TRANSPORT'; payload: TransportProfile }
   | { type: 'SET_ANALYSIS_POINT'; payload: [number, number] | null }
+  | { type: 'SET_ANALYSIS_TYPE'; payload: AnalysisType }
   | { type: 'SET_THRESHOLDS'; payload: number[] }
+  | { type: 'SET_DISTANCE_THRESHOLDS'; payload: number[] }
+  | { type: 'SET_SPEED'; payload: number }
   | { type: 'SET_FACILITIES'; payload: Facility[] }
   | { type: 'SET_SIMULATED_FACILITIES'; payload: Facility[] }
   | { type: 'ADD_SIMULATED_FACILITY'; payload: Facility }
@@ -37,18 +45,21 @@ type Action =
   | { type: 'RESET_ANALYSIS' };
 
 const initialState: State = {
-  center: [-1.2921, 36.8219], // Nairobi
+  center: [-1.2921, 36.8219],
   zoom: 12,
-  transportProfile: 'foot-walking', // Default to walking
+  transportProfile: 'foot-walking',
   analysisPoint: null,
-  timeThresholds: [600, 1200, 1800],
+  analysisType: 'time',
+  timeThresholds: [600, 1200, 1800, 2400, 3000, 3600], // 10-60 min in seconds
+  distanceThresholds: [1000, 2000, 3000, 4000, 5000, 6000], // 1-6 km in meters
+  speed: 5, // km/h for walking
   searchRadius: 10000,
-  activeTab: 'summary',
+  activeTab: 'settings',
   isAnalyzing: false,
   showFacilities: true,
   showIsochrones: true,
-  showPopulation: false,  // OFF by default
-  showUnderserved: false,  // OFF by default
+  showPopulation: false,
+  showUnderserved: false,
   simulationMode: false,
   facilities: [],
   simulatedFacilities: [],
@@ -64,9 +75,12 @@ function reducer(state: State, action: Action): State {
   switch (action.type) {
     case 'SET_CENTER': return { ...state, center: action.payload };
     case 'SET_ZOOM': return { ...state, zoom: action.payload };
-    case 'SET_TRANSPORT': return { ...state, transportProfile: action.payload };
+    case 'SET_TRANSPORT': return { ...state, transportProfile: action.payload, speed: DEFAULT_SPEEDS[action.payload] };
     case 'SET_ANALYSIS_POINT': return { ...state, analysisPoint: action.payload };
+    case 'SET_ANALYSIS_TYPE': return { ...state, analysisType: action.payload };
     case 'SET_THRESHOLDS': return { ...state, timeThresholds: action.payload };
+    case 'SET_DISTANCE_THRESHOLDS': return { ...state, distanceThresholds: action.payload };
+    case 'SET_SPEED': return { ...state, speed: action.payload };
     case 'SET_FACILITIES': return { ...state, facilities: action.payload };
     case 'SET_SIMULATED_FACILITIES': return { ...state, simulatedFacilities: action.payload };
     case 'ADD_SIMULATED_FACILITY': return { ...state, simulatedFacilities: [...state.simulatedFacilities, action.payload] };

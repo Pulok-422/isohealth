@@ -1,13 +1,12 @@
-import { useCallback, useRef } from 'react';
+import { useCallback } from 'react';
 import { useAppState } from '@/context/AppContext';
 import { fetchFacilities, generateIsochrones } from '@/lib/api';
 import { generatePopulationGrid, calculateCoverage, findUnderservedClusters, suggestFacilityLocations, haversine } from '@/lib/analysis';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
-// Simple in-memory cache
 const cache = new Map<string, { data: any; ts: number }>();
-const CACHE_TTL = 5 * 60 * 1000; // 5 min
+const CACHE_TTL = 5 * 60 * 1000;
 
 function getCached(key: string) {
   const entry = cache.get(key);
@@ -26,18 +25,25 @@ export function useAnalysis() {
     dispatch({ type: 'SET_ANALYSIS_POINT', payload: [lat, lon] });
 
     try {
-      // Cache keys
-      const facKey = `fac-${lat.toFixed(3)}-${lon.toFixed(3)}-${state.searchRadius}`;
-      const isoKey = `iso-${lat.toFixed(3)}-${lon.toFixed(3)}-${state.transportProfile}-${state.timeThresholds.join(',')}`;
+      const ranges = state.analysisType === 'distance' ? state.distanceThresholds : state.timeThresholds;
+      const rangeType = state.analysisType;
 
-      // Fetch with cache
+      const facKey = `fac-${lat.toFixed(3)}-${lon.toFixed(3)}-${state.searchRadius}`;
+      const isoKey = `iso-${lat.toFixed(3)}-${lon.toFixed(3)}-${state.transportProfile}-${rangeType}-${ranges.join(',')}`;
+
       let facilities = getCached(facKey);
       let isochrones = getCached(isoKey);
 
       const promises: Promise<any>[] = [];
       if (!facilities) promises.push(fetchFacilities(lat, lon, state.searchRadius).then(f => { facilities = f; setCache(facKey, f); }));
-      if (!isochrones) promises.push(generateIsochrones(lat, lon, state.transportProfile, state.timeThresholds).then(i => { isochrones = i; setCache(isoKey, i); }));
+      if (!isochrones) promises.push(generateIsochrones(lat, lon, state.transportProfile, ranges, rangeType).then(i => { isochrones = i; setCache(isoKey, i); }));
       if (promises.length) await Promise.all(promises);
+
+      // Debug logging
+      if (isochrones?.features) {
+        console.log('Isochrone feature count:', isochrones.features.length);
+        console.log('Isochrone values:', isochrones.features.map((f: any) => f.properties?.value));
+      }
 
       dispatch({ type: 'SET_FACILITIES', payload: facilities });
 
@@ -80,7 +86,6 @@ export function useAnalysis() {
       const suggestions = suggestFacilityLocations(underserved);
       dispatch({ type: 'SET_OPTIMIZATION', payload: suggestions });
 
-      // Log to database (best-effort for logged-in users, session tracking for guests)
       supabase.auth.getUser().then(({ data: { user } }) => {
         if (user) {
           supabase.from('isochrone_requests').insert({
@@ -88,8 +93,8 @@ export function useAnalysis() {
             latitude: lat,
             longitude: lon,
             profile: state.transportProfile,
-            ranges: state.timeThresholds,
-            request_type: 'analysis',
+            ranges: ranges as any,
+            request_type: rangeType,
           }).then(() => {});
         }
       });
@@ -101,7 +106,7 @@ export function useAnalysis() {
     } finally {
       dispatch({ type: 'SET_ANALYZING', payload: false });
     }
-  }, [state.searchRadius, state.transportProfile, state.timeThresholds, state.simulatedFacilities, dispatch]);
+  }, [state.searchRadius, state.transportProfile, state.analysisType, state.timeThresholds, state.distanceThresholds, state.simulatedFacilities, dispatch]);
 
   return { runAnalysis };
 }
