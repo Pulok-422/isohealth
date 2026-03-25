@@ -12,21 +12,37 @@ import type { Facility } from '@/types/health';
 
 // 6-band isochrone colors (yellow → red → dark red)
 const ISOCHRONE_COLORS = [
-  'rgba(255, 245, 157, 0.60)',
-  'rgba(255, 224, 130, 0.60)',
-  'rgba(255, 183, 77, 0.60)',
-  'rgba(255, 138, 101, 0.60)',
-  'rgba(239, 83, 80, 0.60)',
-  'rgba(173, 20, 87, 0.60)',
+  '#fff59d',
+  '#ffe082',
+  '#ffb74d',
+  '#ff8a65',
+  '#ef5350',
+  '#ad1457',
 ];
-const ISOCHRONE_BORDERS = ['#fff59d', '#ffe082', '#ffb74d', '#ff8a65', '#ef5350', '#ad1457'];
+
+const ISOCHRONE_BORDERS = [
+  '#fff59d',
+  '#ffe082',
+  '#ffb74d',
+  '#ff8a65',
+  '#ef5350',
+  '#ad1457',
+];
 
 function createFacilityIcon(type: string, isSimulated: boolean = false) {
   const icons: Record<string, string> = {
-    hospital: '🏥', clinic: '🏨', pharmacy: '💊', doctors: '👨‍⚕️', healthcare: '⚕️',
+    hospital: '🏥',
+    clinic: '🏨',
+    pharmacy: '💊',
+    doctors: '👨‍⚕️',
+    healthcare: '⚕️',
   };
+
   const emoji = icons[type] || '⚕️';
-  const border = isSimulated ? 'border: 2px dashed hsl(38, 90%, 55%);' : 'border: 1px solid hsl(220, 13%, 85%);';
+  const border = isSimulated
+    ? 'border: 2px dashed hsl(38, 90%, 55%);'
+    : 'border: 1px solid hsl(220, 13%, 85%);';
+
   return L.divIcon({
     html: `<div style="font-size:18px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;background:white;border-radius:50%;${border}box-shadow:0 2px 6px rgba(0,0,0,0.15);">${emoji}</div>`,
     className: '',
@@ -43,15 +59,31 @@ const selectedLocationIcon = L.divIcon({
 });
 
 const BASEMAPS = {
-  positron: { url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', label: 'Light', attribution: '&copy; CARTO' },
-  osm: { url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', label: 'OSM', attribution: '&copy; OpenStreetMap' },
-  satellite: { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', label: 'Satellite', attribution: '&copy; Esri' },
+  positron: {
+    url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+    label: 'Light',
+    attribution: '&copy; CARTO',
+  },
+  osm: {
+    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    label: 'OSM',
+    attribution: '&copy; OpenStreetMap',
+  },
+  satellite: {
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    label: 'Satellite',
+    attribution: '&copy; Esri',
+  },
 };
 
 function MapUpdater() {
   const { state } = useAppState();
   const map = useMap();
-  useEffect(() => { map.setView(state.center, state.zoom, { animate: true }); }, [state.center, state.zoom, map]);
+
+  useEffect(() => {
+    map.setView(state.center, state.zoom, { animate: true });
+  }, [state.center, state.zoom, map]);
+
   return null;
 }
 
@@ -62,12 +94,15 @@ function IsochroneFitter() {
 
   useEffect(() => {
     if (!state.analysisResult?.isochrones) return;
+
     const key = JSON.stringify(state.analysisResult.isochrones).slice(0, 100);
     if (key === prevIso.current) return;
     prevIso.current = key;
+
     try {
       const geoLayer = L.geoJSON(state.analysisResult.isochrones);
       const bounds = geoLayer.getBounds();
+
       if (bounds.isValid()) {
         map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
       }
@@ -79,9 +114,11 @@ function IsochroneFitter() {
 
 function MapClickHandler() {
   const { state, dispatch } = useAppState();
+
   useMapEvents({
     click(e) {
       const { lat, lng } = e.latlng;
+
       if (state.simulationMode) {
         const newFacility: Facility = {
           id: Date.now(),
@@ -92,12 +129,14 @@ function MapClickHandler() {
           tags: {},
           isSimulated: true,
         };
+
         dispatch({ type: 'ADD_SIMULATED_FACILITY', payload: newFacility });
       } else {
         dispatch({ type: 'SET_ANALYSIS_POINT', payload: [lat, lng] });
       }
     },
   });
+
   return null;
 }
 
@@ -107,6 +146,7 @@ function ClusteredFacilityMarkers({ facilities }: { facilities: Facility[] }) {
 
   useEffect(() => {
     if (clusterRef.current) map.removeLayer(clusterRef.current);
+
     const cluster = (L as any).markerClusterGroup({
       maxClusterRadius: 50,
       spiderfyOnMaxZoom: true,
@@ -115,6 +155,7 @@ function ClusteredFacilityMarkers({ facilities }: { facilities: Facility[] }) {
       disableClusteringAtZoom: 14,
       iconCreateFunction: (c: any) => {
         const count = c.getChildCount();
+
         return L.divIcon({
           html: `<div style="width:36px;height:36px;display:flex;align-items:center;justify-content:center;background:hsl(210,80%,45%);color:white;border-radius:50%;font-size:12px;font-weight:600;box-shadow:0 2px 6px rgba(0,0,0,0.2);border:2px solid white;">${count}</div>`,
           className: '',
@@ -125,16 +166,23 @@ function ClusteredFacilityMarkers({ facilities }: { facilities: Facility[] }) {
     });
 
     facilities.forEach((f) => {
-      const marker = L.marker([f.lat, f.lon], { icon: createFacilityIcon(f.type, f.isSimulated) });
+      const marker = L.marker([f.lat, f.lon], {
+        icon: createFacilityIcon(f.type, f.isSimulated),
+      });
+
       marker.bindPopup(
         `<div style="font-size:13px"><strong>${f.name}</strong><br/><span style="text-transform:capitalize">${f.type}${f.isSimulated ? ' (Simulated)' : ''}</span><br/><code>${f.lat.toFixed(4)}, ${f.lon.toFixed(4)}</code></div>`
       );
+
       cluster.addLayer(marker);
     });
 
     map.addLayer(cluster);
     clusterRef.current = cluster;
-    return () => { if (clusterRef.current) map.removeLayer(clusterRef.current); };
+
+    return () => {
+      if (clusterRef.current) map.removeLayer(clusterRef.current);
+    };
   }, [facilities, map]);
 
   return null;
@@ -142,6 +190,7 @@ function ClusteredFacilityMarkers({ facilities }: { facilities: Facility[] }) {
 
 function OptimizationMarkers() {
   const { state } = useAppState();
+
   return (
     <>
       {state.optimizationResults.map((opt, i) => (
@@ -149,7 +198,13 @@ function OptimizationMarkers() {
           key={`opt-${i}`}
           center={[opt.lat, opt.lon]}
           radius={12}
-          pathOptions={{ color: 'hsl(270, 60%, 55%)', fillColor: 'hsl(270, 60%, 55%)', fillOpacity: 0.2, weight: 2, dashArray: '4,6' }}
+          pathOptions={{
+            color: 'hsl(270, 60%, 55%)',
+            fillColor: 'hsl(270, 60%, 55%)',
+            fillOpacity: 0.2,
+            weight: 2,
+            dashArray: '4,6',
+          }}
         >
           <Popup>
             <div className="text-sm space-y-1">
@@ -166,7 +221,9 @@ function OptimizationMarkers() {
 
 function AnalysisPointMarker() {
   const { state } = useAppState();
+
   if (!state.analysisPoint) return null;
+
   return (
     <Marker position={state.analysisPoint} icon={selectedLocationIcon}>
       <Popup>
@@ -182,40 +239,70 @@ function AnalysisPointMarker() {
 }
 
 /**
- * Sort isochrone features largest-first so inner bands render on top.
- * Color by sorted ascending value index.
+ * Render isochrones band-by-band instead of a single GeoJSON block.
+ * This improves visible band separation even when the backend returns
+ * cumulative nested polygons.
  */
 function SortedIsochrones({ data }: { data: any }) {
-  const sortedData = useMemo(() => {
-    if (!data?.features?.length) return data;
-    const features = [...data.features];
-    // Sort descending by value so largest polygon renders first (bottom)
-    features.sort((a: any, b: any) => (b.properties?.value || 0) - (a.properties?.value || 0));
+  const { featuresDesc, ascValues } = useMemo(() => {
+    if (!data?.features?.length) {
+      return {
+        featuresDesc: [],
+        ascValues: [] as number[],
+      };
+    }
 
-    // Build ascending value list for color mapping
-    const ascValues = [...new Set(features.map((f: any) => f.properties?.value))].sort((a: any, b: any) => a - b);
+    const validFeatures = [...data.features].filter(
+      (f: any) => f?.geometry && f?.properties?.value != null
+    );
 
-    return { ...data, features, _ascValues: ascValues };
+    const asc = [...new Set(
+      validFeatures.map((f: any) => Number(f.properties.value))
+    )].sort((a, b) => a - b);
+
+    const desc = [...validFeatures].sort(
+      (a: any, b: any) => Number(b.properties.value) - Number(a.properties.value)
+    );
+
+    return {
+      featuresDesc: desc,
+      ascValues: asc,
+    };
   }, [data]);
 
-  const ascValues = sortedData._ascValues || [];
+  if (!featuresDesc.length) return null;
 
   return (
-    <GeoJSON
-      key={JSON.stringify(ascValues)}
-      data={{ ...sortedData, features: sortedData.features }}
-      style={(feature) => {
-        const val = feature?.properties?.value;
+    <>
+      {featuresDesc.map((feature: any, index: number) => {
+        const val = Number(feature?.properties?.value);
         const idx = ascValues.indexOf(val);
         const colorIdx = idx >= 0 ? Math.min(idx, ISOCHRONE_COLORS.length - 1) : 0;
-        return {
-          fillColor: ISOCHRONE_COLORS[colorIdx],
-          color: ISOCHRONE_BORDERS[colorIdx],
-          weight: 1.5,
-          fillOpacity: 0.45,
-        };
-      }}
-    />
+
+        const totalBands = Math.max(ascValues.length, 1);
+        const opacityStep = idx >= 0 ? (idx + 1) / totalBands : 1;
+
+        return (
+          <GeoJSON
+            key={`iso-${val}-${index}`}
+            data={feature}
+            style={{
+              fillColor: ISOCHRONE_COLORS[colorIdx],
+              color: ISOCHRONE_BORDERS[colorIdx],
+              weight: 2.2,
+              opacity: 1,
+              fillOpacity: 0.18 + opacityStep * 0.1,
+            }}
+            eventHandlers={{
+              add: (e) => {
+                const layer = e.target;
+                if (layer?.bringToFront) layer.bringToFront();
+              },
+            }}
+          />
+        );
+      })}
+    </>
   );
 }
 
@@ -225,17 +312,19 @@ function BasemapSwitcher({ basemap }: { basemap: keyof typeof BASEMAPS }) {
 
   useEffect(() => {
     if (layerRef.current) map.removeLayer(layerRef.current);
+
     const bm = BASEMAPS[basemap];
     const layer = L.tileLayer(bm.url, { attribution: bm.attribution });
     layer.addTo(map);
     layerRef.current = layer;
-    return () => { if (layerRef.current) map.removeLayer(layerRef.current); };
+
+    return () => {
+      if (layerRef.current) map.removeLayer(layerRef.current);
+    };
   }, [basemap, map]);
 
   return null;
 }
-
-
 
 // Store basemap state at module level so floating control outside MapContainer can sync
 let _setBasemapFn: ((b: keyof typeof BASEMAPS) => void) | null = null;
@@ -243,7 +332,12 @@ let _currentBasemap: keyof typeof BASEMAPS = 'positron';
 
 function BasemapSyncInMap() {
   const [basemap, setBasemap] = useState<keyof typeof BASEMAPS>('positron');
-  _setBasemapFn = (b) => { setBasemap(b); _currentBasemap = b; };
+
+  _setBasemapFn = (b) => {
+    setBasemap(b);
+    _currentBasemap = b;
+  };
+
   return <BasemapSwitcher basemap={basemap} />;
 }
 
@@ -263,25 +357,47 @@ function FloatingMapControl() {
 
       {open && (
         <div className="mt-2 bg-card border border-border rounded-lg shadow-lg p-3 min-w-[180px] space-y-3">
-          <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Layers</div>
+          <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            Layers
+          </div>
+
           <label className="flex items-center gap-2 text-sm cursor-pointer">
-            <input type="checkbox" checked={state.showFacilities} onChange={() => dispatch({ type: 'TOGGLE_LAYER', payload: 'showFacilities' })} className="rounded border-border" />
+            <input
+              type="checkbox"
+              checked={state.showFacilities}
+              onChange={() => dispatch({ type: 'TOGGLE_LAYER', payload: 'showFacilities' })}
+              className="rounded border-border"
+            />
             Facilities
           </label>
+
           <label className="flex items-center gap-2 text-sm cursor-pointer">
-            <input type="checkbox" checked={state.showIsochrones} onChange={() => dispatch({ type: 'TOGGLE_LAYER', payload: 'showIsochrones' })} className="rounded border-border" />
+            <input
+              type="checkbox"
+              checked={state.showIsochrones}
+              onChange={() => dispatch({ type: 'TOGGLE_LAYER', payload: 'showIsochrones' })}
+              className="rounded border-border"
+            />
             Isochrones
           </label>
 
           <div className="border-t border-border pt-2 mt-2">
-            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Basemap</div>
+            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+              Basemap
+            </div>
+
             <div className="flex gap-1">
               {(Object.keys(BASEMAPS) as (keyof typeof BASEMAPS)[]).map((key) => (
                 <button
                   key={key}
-                  onClick={() => { _setBasemapFn?.(key); forceRender(n => n + 1); }}
+                  onClick={() => {
+                    _setBasemapFn?.(key);
+                    forceRender((n) => n + 1);
+                  }}
                   className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
-                    _currentBasemap === key ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground'
+                    _currentBasemap === key
+                      ? 'bg-primary/10 text-primary'
+                      : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   {BASEMAPS[key].label}
@@ -317,12 +433,12 @@ export function HealthMap() {
           attribution='&copy; <a href="https://carto.com/">CARTO</a>'
           url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
         />
+
         <BasemapSyncInMap />
         <MapUpdater />
         <MapClickHandler />
         <IsochroneFitter />
 
-        {/* Isochrones — sorted rendering */}
         {state.showIsochrones && state.analysisResult?.isochrones && (
           <SortedIsochrones data={state.analysisResult.isochrones} />
         )}
@@ -362,7 +478,9 @@ export function HealthMap() {
         <div className="absolute inset-0 bg-background/40 backdrop-blur-sm flex items-center justify-center z-[1000]">
           <div className="glass-panel p-6 flex flex-col items-center gap-3">
             <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-            <span className="text-sm text-muted-foreground">Running accessibility analysis...</span>
+            <span className="text-sm text-muted-foreground">
+              Running accessibility analysis...
+            </span>
           </div>
         </div>
       )}
@@ -384,7 +502,9 @@ export function HealthMap() {
               <p className="font-medium text-foreground text-sm">Get Started</p>
               <p>1. Select a location (search, click map, or use My Location)</p>
               <p>2. Configure analysis settings in the right panel</p>
-              <p>3. Click <span className="text-primary font-medium">Analyze Accessibility</span></p>
+              <p>
+                3. Click <span className="text-primary font-medium">Analyze Accessibility</span>
+              </p>
             </div>
           </div>
         </div>
