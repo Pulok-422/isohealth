@@ -43,13 +43,17 @@ export interface OptimizationResult {
 }
 
 export type TransportProfile = 'driving-car' | 'cycling-regular' | 'foot-walking';
+export type AnalysisType = 'time' | 'distance';
 
 export interface AppState {
   center: [number, number];
   zoom: number;
   transportProfile: TransportProfile;
   analysisPoint: [number, number] | null;
+  analysisType: AnalysisType;
   timeThresholds: number[];
+  distanceThresholds: number[];
+  speed: number;
   searchRadius: number;
   activeTab: string;
   isAnalyzing: boolean;

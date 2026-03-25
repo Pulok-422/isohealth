@@ -18,13 +18,22 @@ serve(async (req) => {
       });
     }
 
-    const { lat, lon, profile = 'driving-car', ranges = [600, 1200, 1800] } = await req.json();
+    const { lat, lon, profile = 'foot-walking', ranges, range_type = 'time' } = await req.json();
 
     if (!lat || !lon) {
       return new Response(JSON.stringify({ error: 'lat and lon are required' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
+
+    // Default ranges: 10-60 min (seconds) or 1-6 km (meters)
+    const defaultRanges = range_type === 'distance'
+      ? [1000, 2000, 3000, 4000, 5000, 6000]
+      : [600, 1200, 1800, 2400, 3000, 3600];
+
+    const finalRanges = ranges && ranges.length > 0 ? ranges : defaultRanges;
+
+    console.log(`Isochrone request: profile=${profile}, range_type=${range_type}, ranges=${JSON.stringify(finalRanges)}`);
 
     const response = await fetch(`https://api.openrouteservice.org/v2/isochrones/${profile}`, {
       method: 'POST',
@@ -34,8 +43,8 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         locations: [[lon, lat]],
-        range: ranges,
-        range_type: 'time',
+        range: finalRanges,
+        range_type,
       }),
     });
 
@@ -45,6 +54,11 @@ serve(async (req) => {
     }
 
     const data = await response.json();
+
+    // Validate response
+    console.log(`Isochrone feature count: ${data.features?.length}`);
+    console.log(`Isochrone values: ${data.features?.map((f: any) => f.properties?.value)}`);
+
     return new Response(JSON.stringify(data), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
