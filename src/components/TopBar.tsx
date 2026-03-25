@@ -52,12 +52,12 @@ export function TopBar() {
         {/* Left: Brand */}
         <div className="flex items-center gap-2">
           
-          {/* Logo container FIXED */}
-          <div className="w-9 h-9 rounded-lg bg-white flex items-center justify-center overflow-hidden">
+          {/* Logo container (clean white, slightly bigger for balance) */}
+          <div className="w-10 h-10 rounded-lg bg-white flex items-center justify-center overflow-hidden">
             <img
               src="/iso (2).png"
               alt="iso-Health logo"
-              className="w-8 h-8 object-contain scale-110"
+              className="w-full h-full object-contain scale-150"
             />
           </div>
 
