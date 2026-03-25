@@ -235,54 +235,66 @@ function BasemapSwitcher({ basemap }: { basemap: keyof typeof BASEMAPS }) {
   return null;
 }
 
+function InternalBasemapSwitcher() {
+  const [basemap, setBasemap] = useState<keyof typeof BASEMAPS>('positron');
+  return <BasemapSwitcher basemap={basemap} />;
+}
+
+// Store basemap state at module level so floating control outside MapContainer can sync
+let _setBasemapFn: ((b: keyof typeof BASEMAPS) => void) | null = null;
+let _currentBasemap: keyof typeof BASEMAPS = 'positron';
+
+function BasemapSyncInMap() {
+  const [basemap, setBasemap] = useState<keyof typeof BASEMAPS>('positron');
+  _setBasemapFn = (b) => { setBasemap(b); _currentBasemap = b; };
+  return <BasemapSwitcher basemap={basemap} />;
+}
+
 function FloatingMapControl() {
   const { state, dispatch } = useAppState();
   const [open, setOpen] = useState(false);
-  const [basemap, setBasemap] = useState<keyof typeof BASEMAPS>('positron');
+  const [, forceRender] = useState(0);
 
   return (
-    <>
-      <BasemapSwitcher basemap={basemap} />
-      <div className="absolute top-3 right-3 z-[1000]">
-        <button
-          onClick={() => setOpen(!open)}
-          className="w-9 h-9 bg-card border border-border rounded-lg shadow-md flex items-center justify-center hover:bg-secondary transition-colors"
-        >
-          <Layers className="w-4 h-4 text-foreground" />
-        </button>
+    <div className="absolute top-3 right-3 z-[1000]">
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-9 h-9 bg-card border border-border rounded-lg shadow-md flex items-center justify-center hover:bg-secondary transition-colors"
+      >
+        <Layers className="w-4 h-4 text-foreground" />
+      </button>
 
-        {open && (
-          <div className="mt-2 bg-card border border-border rounded-lg shadow-lg p-3 min-w-[180px] space-y-3">
-            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Layers</div>
-            <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <input type="checkbox" checked={state.showFacilities} onChange={() => dispatch({ type: 'TOGGLE_LAYER', payload: 'showFacilities' })} className="rounded border-border" />
-              Facilities
-            </label>
-            <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <input type="checkbox" checked={state.showIsochrones} onChange={() => dispatch({ type: 'TOGGLE_LAYER', payload: 'showIsochrones' })} className="rounded border-border" />
-              Isochrones
-            </label>
+      {open && (
+        <div className="mt-2 bg-card border border-border rounded-lg shadow-lg p-3 min-w-[180px] space-y-3">
+          <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Layers</div>
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <input type="checkbox" checked={state.showFacilities} onChange={() => dispatch({ type: 'TOGGLE_LAYER', payload: 'showFacilities' })} className="rounded border-border" />
+            Facilities
+          </label>
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <input type="checkbox" checked={state.showIsochrones} onChange={() => dispatch({ type: 'TOGGLE_LAYER', payload: 'showIsochrones' })} className="rounded border-border" />
+            Isochrones
+          </label>
 
-            <div className="border-t border-border pt-2 mt-2">
-              <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Basemap</div>
-              <div className="flex gap-1">
-                {(Object.keys(BASEMAPS) as (keyof typeof BASEMAPS)[]).map((key) => (
-                  <button
-                    key={key}
-                    onClick={() => setBasemap(key)}
-                    className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
-                      basemap === key ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    {BASEMAPS[key].label}
-                  </button>
-                ))}
-              </div>
+          <div className="border-t border-border pt-2 mt-2">
+            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Basemap</div>
+            <div className="flex gap-1">
+              {(Object.keys(BASEMAPS) as (keyof typeof BASEMAPS)[]).map((key) => (
+                <button
+                  key={key}
+                  onClick={() => { _setBasemapFn?.(key); forceRender(n => n + 1); }}
+                  className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
+                    _currentBasemap === key ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {BASEMAPS[key].label}
+                </button>
+              ))}
             </div>
           </div>
-        )}
-      </div>
-    </>
+        </div>
+      )}
+    </div>
   );
 }
 
