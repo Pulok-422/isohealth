@@ -1,5 +1,14 @@
 import { createContext, useContext, useReducer, type ReactNode } from 'react';
-import type { AppState, Facility, AnalysisResult, Scenario, TransportProfile, AnalysisType, OptimizationResult, PopulationPoint, PopulationSource } from '@/types/health';
+import type {
+  AppState,
+  Facility,
+  AnalysisResult,
+  Scenario,
+  TransportProfile,
+  AnalysisType,
+  OptimizationResult,
+  PopulationPoint,
+} from '@/types/health';
 
 interface State extends AppState {
   facilities: Facility[];
@@ -35,14 +44,19 @@ type Action =
   | { type: 'SET_POPULATION'; payload: PopulationPoint[] }
   | { type: 'SET_ANALYZING'; payload: boolean }
   | { type: 'SET_ACTIVE_TAB'; payload: string }
-  | { type: 'TOGGLE_LAYER'; payload: keyof Pick<AppState, 'showFacilities' | 'showIsochrones' | 'showPopulation' | 'showUnderserved'> }
+  | {
+      type: 'TOGGLE_LAYER';
+      payload: keyof Pick<
+        AppState,
+        'showFacilities' | 'showIsochrones' | 'showPopulation' | 'showUnderserved'
+      >;
+    }
   | { type: 'SET_SIMULATION_MODE'; payload: boolean }
   | { type: 'ADD_SCENARIO'; payload: Scenario }
   | { type: 'SET_ACTIVE_SCENARIO'; payload: string | null }
   | { type: 'SET_OPTIMIZATION'; payload: OptimizationResult[] }
   | { type: 'SET_ROUTE'; payload: any }
   | { type: 'SET_SEARCH_RADIUS'; payload: number }
-  | { type: 'SET_POPULATION_SOURCE'; payload: PopulationSource }
   | { type: 'RESET_ANALYSIS' };
 
 const initialState: State = {
@@ -75,39 +89,111 @@ const initialState: State = {
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
-    case 'SET_CENTER': return { ...state, center: action.payload };
-    case 'SET_ZOOM': return { ...state, zoom: action.payload };
-    case 'SET_TRANSPORT': return { ...state, transportProfile: action.payload, speed: DEFAULT_SPEEDS[action.payload] };
-    case 'SET_ANALYSIS_POINT': return { ...state, analysisPoint: action.payload };
-    case 'SET_ANALYSIS_TYPE': return { ...state, analysisType: action.payload };
-    case 'SET_THRESHOLDS': return { ...state, timeThresholds: action.payload };
-    case 'SET_DISTANCE_THRESHOLDS': return { ...state, distanceThresholds: action.payload };
-    case 'SET_SPEED': return { ...state, speed: action.payload };
-    case 'SET_FACILITIES': return { ...state, facilities: action.payload };
-    case 'SET_SIMULATED_FACILITIES': return { ...state, simulatedFacilities: action.payload };
-    case 'ADD_SIMULATED_FACILITY': return { ...state, simulatedFacilities: [...state.simulatedFacilities, action.payload] };
-    case 'REMOVE_SIMULATED_FACILITY': return { ...state, simulatedFacilities: state.simulatedFacilities.filter(f => f.id !== action.payload) };
-    case 'SET_ANALYSIS_RESULT': return { ...state, analysisResult: action.payload };
-    case 'SET_POPULATION': return { ...state, populationGrid: action.payload };
-    case 'SET_ANALYZING': return { ...state, isAnalyzing: action.payload };
-    case 'SET_ACTIVE_TAB': return { ...state, activeTab: action.payload };
-    case 'TOGGLE_LAYER': return { ...state, [action.payload]: !state[action.payload] };
-    case 'SET_SIMULATION_MODE': return { ...state, simulationMode: action.payload };
-    case 'ADD_SCENARIO': return { ...state, scenarios: [...state.scenarios, action.payload] };
-    case 'SET_ACTIVE_SCENARIO': return { ...state, activeScenario: action.payload };
-    case 'SET_OPTIMIZATION': return { ...state, optimizationResults: action.payload };
-    case 'SET_ROUTE': return { ...state, routeGeoJson: action.payload };
-    case 'SET_SEARCH_RADIUS': return { ...state, searchRadius: action.payload };
-    case 'SET_POPULATION_SOURCE': return { ...state, populationSource: action.payload };
-    case 'RESET_ANALYSIS': return { ...state, analysisPoint: null, analysisResult: null, facilities: [], populationGrid: [], optimizationResults: [], routeGeoJson: null };
-    default: return state;
+    case 'SET_CENTER':
+      return { ...state, center: action.payload };
+
+    case 'SET_ZOOM':
+      return { ...state, zoom: action.payload };
+
+    case 'SET_TRANSPORT':
+      return {
+        ...state,
+        transportProfile: action.payload,
+        speed: DEFAULT_SPEEDS[action.payload],
+      };
+
+    case 'SET_ANALYSIS_POINT':
+      return { ...state, analysisPoint: action.payload };
+
+    case 'SET_ANALYSIS_TYPE':
+      return { ...state, analysisType: action.payload };
+
+    case 'SET_THRESHOLDS':
+      return { ...state, timeThresholds: action.payload };
+
+    case 'SET_DISTANCE_THRESHOLDS':
+      return { ...state, distanceThresholds: action.payload };
+
+    case 'SET_SPEED':
+      return { ...state, speed: action.payload };
+
+    case 'SET_FACILITIES':
+      return { ...state, facilities: action.payload };
+
+    case 'SET_SIMULATED_FACILITIES':
+      return { ...state, simulatedFacilities: action.payload };
+
+    case 'ADD_SIMULATED_FACILITY':
+      return {
+        ...state,
+        simulatedFacilities: [...state.simulatedFacilities, action.payload],
+      };
+
+    case 'REMOVE_SIMULATED_FACILITY':
+      return {
+        ...state,
+        simulatedFacilities: state.simulatedFacilities.filter(
+          (f) => f.id !== action.payload
+        ),
+      };
+
+    case 'SET_ANALYSIS_RESULT':
+      return { ...state, analysisResult: action.payload };
+
+    case 'SET_POPULATION':
+      return { ...state, populationGrid: action.payload };
+
+    case 'SET_ANALYZING':
+      return { ...state, isAnalyzing: action.payload };
+
+    case 'SET_ACTIVE_TAB':
+      return { ...state, activeTab: action.payload };
+
+    case 'TOGGLE_LAYER':
+      return { ...state, [action.payload]: !state[action.payload] };
+
+    case 'SET_SIMULATION_MODE':
+      return { ...state, simulationMode: action.payload };
+
+    case 'ADD_SCENARIO':
+      return { ...state, scenarios: [...state.scenarios, action.payload] };
+
+    case 'SET_ACTIVE_SCENARIO':
+      return { ...state, activeScenario: action.payload };
+
+    case 'SET_OPTIMIZATION':
+      return { ...state, optimizationResults: action.payload };
+
+    case 'SET_ROUTE':
+      return { ...state, routeGeoJson: action.payload };
+
+    case 'SET_SEARCH_RADIUS':
+      return { ...state, searchRadius: action.payload };
+
+    case 'RESET_ANALYSIS':
+      return {
+        ...state,
+        analysisPoint: null,
+        analysisResult: null,
+        facilities: [],
+        populationGrid: [],
+        optimizationResults: [],
+        routeGeoJson: null,
+      };
+
+    default:
+      return state;
   }
 }
 
-const AppContext = createContext<{ state: State; dispatch: React.Dispatch<Action> } | null>(null);
+const AppContext = createContext<{
+  state: State;
+  dispatch: React.Dispatch<Action>;
+} | null>(null);
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState);
+
   return <AppContext.Provider value={{ state, dispatch }}>{children}</AppContext.Provider>;
 }
 
