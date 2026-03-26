@@ -24,8 +24,6 @@ function setCache(key: string, data: any) {
   cache.set(key, { data, ts: Date.now() });
 }
 
-/* ---------- point-in-polygon helpers ---------- */
-
 function pointInRing(point: [number, number], ring: number[][]) {
   const [x, y] = point;
   let inside = false;
@@ -155,15 +153,13 @@ export function useAnalysis() {
 
         dispatch({ type: 'SET_FACILITIES', payload: facilities });
 
-        // Fetch population data using bbox from isochrones
         const bbox = getBBoxFromIsochrones(isochrones);
         let popGrid;
-        let usedSource = state.populationSource;
+        let usedSource = 'worldpop';
 
         if (bbox) {
-          popGrid = await getPopulationData(bbox, state.populationSource);
+          popGrid = await getPopulationData(bbox, 'worldpop');
         } else {
-          // Fallback: generate around analysis point
           const { generatePopulationGrid } = await import('@/lib/analysis');
           popGrid = generatePopulationGrid(lat, lon);
           usedSource = 'simulated';
@@ -255,7 +251,6 @@ export function useAnalysis() {
       state.timeThresholds,
       state.distanceThresholds,
       state.simulatedFacilities,
-      state.populationSource,
       dispatch,
     ]
   );
