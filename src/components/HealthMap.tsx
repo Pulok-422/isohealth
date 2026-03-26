@@ -1,5 +1,14 @@
 import { useEffect, useRef, useMemo, useState } from 'react';
-import { MapContainer, TileLayer, useMap, useMapEvents, CircleMarker, GeoJSON, Popup, Marker } from 'react-leaflet';
+import {
+  MapContainer,
+  TileLayer,
+  useMap,
+  useMapEvents,
+  CircleMarker,
+  GeoJSON,
+  Popup,
+  Marker,
+} from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet.markercluster/dist/MarkerCluster.css';
@@ -10,14 +19,13 @@ import { Layers, RotateCcw } from 'lucide-react';
 import { MapLegend } from '@/components/MapLegend';
 import type { Facility } from '@/types/health';
 
-// 6-band isochrone colors
 const ISOCHRONE_COLORS = [
-  '#fff59d',
-  '#ffe082',
-  '#ffb74d',
-  '#ff8a65',
-  '#ef5350',
-  '#ad1457',
+  'rgba(255, 245, 157, 0.60)',
+  'rgba(255, 224, 130, 0.60)',
+  'rgba(255, 183, 77, 0.60)',
+  'rgba(255, 138, 101, 0.60)',
+  'rgba(239, 83, 80, 0.60)',
+  'rgba(173, 20, 87, 0.60)',
 ];
 
 const ISOCHRONE_BORDERS = [
@@ -76,6 +84,21 @@ const BASEMAPS = {
   },
 };
 
+function buildIsochroneSignature(data: any, transportProfile?: string, analysisType?: string) {
+  if (!data?.features?.length) {
+    return `${transportProfile || 'na'}|${analysisType || 'na'}|empty`;
+  }
+
+  const parts = data.features.map((f: any) => {
+    const value = f?.properties?.value ?? 'na';
+    const type = f?.geometry?.type ?? 'na';
+    const coordsLen = JSON.stringify(f?.geometry?.coordinates ?? []).length;
+    return `${value}-${type}-${coordsLen}`;
+  });
+
+  return `${transportProfile || 'na'}|${analysisType || 'na'}|${parts.join('|')}`;
+}
+
 function MapUpdater() {
   const { state } = useAppState();
   const map = useMap();
@@ -90,24 +113,37 @@ function MapUpdater() {
 function IsochroneFitter() {
   const { state } = useAppState();
   const map = useMap();
-  const prevIso = useRef<string | null>(null);
+  const prevSignature = useRef<string | null>(null);
+
+  const signature = useMemo(() => {
+    return buildIsochroneSignature(
+      state.analysisResult?.isochrones,
+      state.transportProfile,
+      state.analysisType
+    );
+  }, [
+    state.analysisResult?.isochrones,
+    state.transportProfile,
+    state.analysisType,
+  ]);
 
   useEffect(() => {
-    if (!state.analysisResult?.isochrones) return;
+    if (!state.analysisResult?.isochrones?.features?.length) return;
+    if (signature === prevSignature.current) return;
 
-    const key = JSON.stringify(state.analysisResult.isochrones).slice(0, 100);
-    if (key === prevIso.current) return;
-    prevIso.current = key;
+    prevSignature.current = signature;
 
     try {
-      const geoLayer = L.geoJSON(state.analysisResult.isochrones);
+      const geoLayer = L.geoJSON(state.analysisResult.isochrones as any);
       const bounds = geoLayer.getBounds();
 
       if (bounds.isValid()) {
         map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
       }
-    } catch {}
-  }, [state.analysisResult?.isochrones, map]);
+    } catch (error) {
+      console.error('Failed to fit isochrone bounds:', error);
+    }
+  }, [signature, state.analysisResult?.isochrones, map]);
 
   return null;
 }
@@ -145,7 +181,10 @@ function ClusteredFacilityMarkers({ facilities }: { facilities: Facility[] }) {
   const clusterRef = useRef<L.MarkerClusterGroup | null>(null);
 
   useEffect(() => {
-    if (clusterRef.current) map.removeLayer(clusterRef.current);
+    if (clusterRef.current) {
+      map.removeLayer(clusterRef.current);
+      clusterRef.current = null;
+    }
 
     const cluster = (L as any).markerClusterGroup({
       maxClusterRadius: 50,
@@ -181,7 +220,10 @@ function ClusteredFacilityMarkers({ facilities }: { facilities: Facility[] }) {
     clusterRef.current = cluster;
 
     return () => {
-      if (clusterRef.current) map.removeLayer(clusterRef.current);
+      if (clusterRef.current) {
+        map.removeLayer(clusterRef.current);
+        clusterRef.current = null;
+      }
     };
   }, [facilities, map]);
 
@@ -238,61 +280,57 @@ function AnalysisPointMarker() {
   );
 }
 
-function SortedIsochrones({ data }: { data: any }) {
-  const { featuresDesc, ascValues } = useMemo(() => {
+function SortedIsochrones({
+  data,
+  renderSignature,
+}: {
+  data: any;
+  renderSignature: string;
+}) {
+  const prepared = useMemo(() => {
     if (!data?.features?.length) {
       return {
-        featuresDesc: [],
+        features: [] as any[],
         ascValues: [] as number[],
       };
     }
 
-    const validFeatures = [...data.features].filter(
+    const validFeatures = data.features.filter(
       (f: any) => f?.geometry && f?.properties?.value != null
     );
 
-    const asc = [...new Set(
-      validFeatures.map((f: any) => Number(f.properties.value))
-    )].sort((a, b) => a - b);
-
-    const desc = [...validFeatures].sort(
-      (a: any, b: any) => Number(b.properties.value) - Number(a.properties.value)
+    const featuresDesc = [...validFeatures].sort(
+      (a: any, b: any) => Number(b.properties?.value ?? 0) - Number(a.properties?.value ?? 0)
     );
 
-    return {
-      featuresDesc: desc,
-      ascValues: asc,
-    };
+    const ascValues = [...new Set(validFeatures.map((f: any) => Number(f.properties?.value)))].sort(
+      (a, b) => a - b
+    );
+
+    return { features: featuresDesc, ascValues };
   }, [data]);
 
-  if (!featuresDesc.length) return null;
+  if (!prepared.features.length) return null;
 
   return (
     <>
-      {featuresDesc.map((feature: any, index: number) => {
-        const val = Number(feature?.properties?.value);
-        const idx = ascValues.indexOf(val);
-        const colorIdx = idx >= 0 ? Math.min(idx, ISOCHRONE_COLORS.length - 1) : 0;
+      {prepared.features.map((feature: any, index: number) => {
+        const value = Number(feature?.properties?.value);
+        const colorIndex = prepared.ascValues.indexOf(value);
+        const safeColorIndex =
+          colorIndex >= 0 ? Math.min(colorIndex, ISOCHRONE_COLORS.length - 1) : 0;
 
-        const totalBands = Math.max(ascValues.length, 1);
-        const opacityStep = idx >= 0 ? (idx + 1) / totalBands : 1;
+        const geometryLen = JSON.stringify(feature?.geometry?.coordinates ?? []).length;
 
         return (
           <GeoJSON
-            key={`iso-${val}-${index}`}
+            key={`iso-${renderSignature}-${value}-${index}-${geometryLen}`}
             data={feature}
             style={{
-              fillColor: ISOCHRONE_COLORS[colorIdx],
-              color: ISOCHRONE_BORDERS[colorIdx],
-              weight: 2.2,
-              opacity: 1,
-              fillOpacity: 0.18 + opacityStep * 0.1,
-            }}
-            eventHandlers={{
-              add: (e) => {
-                const layer = e.target;
-                if (layer?.bringToFront) layer.bringToFront();
-              },
+              fillColor: ISOCHRONE_COLORS[safeColorIndex],
+              color: ISOCHRONE_BORDERS[safeColorIndex],
+              weight: 1.5,
+              fillOpacity: 0.45,
             }}
           />
         );
@@ -301,82 +339,15 @@ function SortedIsochrones({ data }: { data: any }) {
   );
 }
 
-/* ---------- point-in-polygon helpers ---------- */
-
-function pointInRing(point: [number, number], ring: number[][]) {
-  const [x, y] = point;
-  let inside = false;
-
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const xi = ring[i][0];
-    const yi = ring[i][1];
-    const xj = ring[j][0];
-    const yj = ring[j][1];
-
-    const intersect =
-      yi > y !== yj > y &&
-      x < ((xj - xi) * (y - yi)) / ((yj - yi) || Number.EPSILON) + xi;
-
-    if (intersect) inside = !inside;
-  }
-
-  return inside;
-}
-
-function pointInPolygonCoords(point: [number, number], polygonCoords: number[][][]) {
-  if (!polygonCoords?.length) return false;
-
-  const outerRing = polygonCoords[0];
-  if (!pointInRing(point, outerRing)) return false;
-
-  for (let i = 1; i < polygonCoords.length; i++) {
-    if (pointInRing(point, polygonCoords[i])) return false;
-  }
-
-  return true;
-}
-
-function pointInGeometry(point: [number, number], geometry: any) {
-  if (!geometry) return false;
-
-  if (geometry.type === 'Polygon') {
-    return pointInPolygonCoords(point, geometry.coordinates);
-  }
-
-  if (geometry.type === 'MultiPolygon') {
-    return geometry.coordinates.some((polygonCoords: number[][][]) =>
-      pointInPolygonCoords(point, polygonCoords)
-    );
-  }
-
-  return false;
-}
-
-function getOutermostIsochroneGeometry(isochrones: any) {
-  const features = isochrones?.features;
-  if (!features?.length) return null;
-
-  const validFeatures = features.filter(
-    (f: any) => f?.geometry && f?.properties?.value != null
-  );
-
-  if (!validFeatures.length) return null;
-
-  const outermost = validFeatures.reduce((maxFeature: any, current: any) => {
-    const maxValue = Number(maxFeature?.properties?.value ?? -Infinity);
-    const currentValue = Number(current?.properties?.value ?? -Infinity);
-    return currentValue > maxValue ? current : maxFeature;
-  });
-
-  return outermost?.geometry ?? null;
-}
-
 function BasemapSwitcher({ basemap }: { basemap: keyof typeof BASEMAPS }) {
   const map = useMap();
   const layerRef = useRef<L.TileLayer | null>(null);
 
   useEffect(() => {
-    if (layerRef.current) map.removeLayer(layerRef.current);
+    if (layerRef.current) {
+      map.removeLayer(layerRef.current);
+      layerRef.current = null;
+    }
 
     const bm = BASEMAPS[basemap];
     const layer = L.tileLayer(bm.url, { attribution: bm.attribution });
@@ -384,7 +355,10 @@ function BasemapSwitcher({ basemap }: { basemap: keyof typeof BASEMAPS }) {
     layerRef.current = layer;
 
     return () => {
-      if (layerRef.current) map.removeLayer(layerRef.current);
+      if (layerRef.current) {
+        map.removeLayer(layerRef.current);
+        layerRef.current = null;
+      }
     };
   }, [basemap, map]);
 
@@ -429,7 +403,9 @@ function FloatingMapControl() {
             <input
               type="checkbox"
               checked={state.showFacilities}
-              onChange={() => dispatch({ type: 'TOGGLE_LAYER', payload: 'showFacilities' })}
+              onChange={() =>
+                dispatch({ type: 'TOGGLE_LAYER', payload: 'showFacilities' })
+              }
               className="rounded border-border"
             />
             Facilities
@@ -439,7 +415,9 @@ function FloatingMapControl() {
             <input
               type="checkbox"
               checked={state.showIsochrones}
-              onChange={() => dispatch({ type: 'TOGGLE_LAYER', payload: 'showIsochrones' })}
+              onChange={() =>
+                dispatch({ type: 'TOGGLE_LAYER', payload: 'showIsochrones' })
+              }
               className="rounded border-border"
             />
             Isochrones
@@ -484,15 +462,22 @@ export function HealthMap() {
     [state.facilities, state.simulatedFacilities]
   );
 
-  const visibleFacilities = useMemo(() => {
-    const isochroneGeometry = getOutermostIsochroneGeometry(state.analysisResult?.isochrones);
-
-    if (!isochroneGeometry) return allFacilities;
-
-    return allFacilities.filter((facility) =>
-      pointInGeometry([facility.lon, facility.lat], isochroneGeometry)
+  const isochroneRenderSignature = useMemo(() => {
+    return buildIsochroneSignature(
+      state.analysisResult?.isochrones,
+      state.transportProfile,
+      state.analysisType
     );
-  }, [allFacilities, state.analysisResult?.isochrones]);
+  }, [
+    state.analysisResult?.isochrones,
+    state.transportProfile,
+    state.analysisType,
+  ]);
+
+  const routeSignature = useMemo(() => {
+    if (!state.routeGeoJson) return 'no-route';
+    return JSON.stringify(state.routeGeoJson).slice(0, 200);
+  }, [state.routeGeoJson]);
 
   return (
     <div className="relative w-full h-full">
@@ -514,11 +499,15 @@ export function HealthMap() {
         <IsochroneFitter />
 
         {state.showIsochrones && state.analysisResult?.isochrones && (
-          <SortedIsochrones data={state.analysisResult.isochrones} />
+          <SortedIsochrones
+            key={`sorted-iso-${isochroneRenderSignature}`}
+            data={state.analysisResult.isochrones}
+            renderSignature={isochroneRenderSignature}
+          />
         )}
 
-        {state.showFacilities && visibleFacilities.length > 0 && (
-          <ClusteredFacilityMarkers facilities={visibleFacilities} />
+        {state.showFacilities && allFacilities.length > 0 && (
+          <ClusteredFacilityMarkers facilities={allFacilities} />
         )}
 
         <OptimizationMarkers />
@@ -526,7 +515,7 @@ export function HealthMap() {
 
         {state.routeGeoJson && (
           <GeoJSON
-            key={`route-${Date.now()}`}
+            key={`route-${routeSignature}`}
             data={state.routeGeoJson}
             style={{ color: 'hsl(210, 80%, 45%)', weight: 4, opacity: 0.8 }}
           />
