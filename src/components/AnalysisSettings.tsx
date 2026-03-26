@@ -31,6 +31,7 @@ export function AnalysisSettings() {
         Analysis Settings
       </div>
 
+      {/* Transport Mode */}
       <div className="space-y-1.5">
         <label className="text-xs font-medium text-foreground">Transport Mode</label>
         <div className="flex gap-1 bg-secondary rounded-lg p-1">
@@ -51,6 +52,7 @@ export function AnalysisSettings() {
         </div>
       </div>
 
+      {/* Analysis Type */}
       <div className="space-y-1.5">
         <label className="text-xs font-medium text-foreground">Analysis Type</label>
         <div className="flex gap-1 bg-secondary rounded-lg p-1">
@@ -74,6 +76,7 @@ export function AnalysisSettings() {
         </div>
       </div>
 
+      {/* Range Bands */}
       <div className="space-y-1.5">
         <label className="text-xs font-medium text-foreground">
           Range Bands ({state.analysisType === 'time' ? 'minutes' : 'km'})
@@ -119,23 +122,7 @@ export function AnalysisSettings() {
         </div>
       </div>
 
-      <div className="space-y-1.5">
-        <label className="text-xs font-medium text-foreground">Speed (km/h)</label>
-        <input
-          type="number"
-          min={1}
-          max={200}
-          value={state.speed}
-          onChange={(e) =>
-            dispatch({ type: 'SET_SPEED', payload: Number(e.target.value) || 5 })
-          }
-          className="w-full h-8 px-3 bg-secondary border border-border rounded-md text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-        />
-        <p className="text-[10px] text-muted-foreground">
-          Used for estimation display. ORS uses profile-based routing.
-        </p>
-      </div>
-
+      {/* Location hint */}
       {!state.analysisPoint && (
         <p className="text-[10px] text-muted-foreground text-center">
           Select a location on the map, search, or use My Location first.
