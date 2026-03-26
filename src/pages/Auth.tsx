@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { Heart, LogIn, UserPlus } from 'lucide-react';
+import { LogIn, UserPlus } from 'lucide-react';
 
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
@@ -59,14 +59,23 @@ export default function Auth() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md">
+      <Card className="w-full max-w-lg">
         <CardHeader className="text-center">
-          <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-3">
-            <Heart className="w-6 h-6 text-primary" />
+          {/* Logo */}
+          <div className="w-14 h-14 rounded-xl bg-white flex items-center justify-center mx-auto mb-3 overflow-hidden border border-border">
+            <img
+              src="/iso (2).png"
+              alt="isoHealth logo"
+              className="w-full h-full object-contain scale-125"
+            />
           </div>
-          <CardTitle className="text-xl">HealthAccess</CardTitle>
+
+          {/* Title */}
+          <CardTitle className="text-xl">isoHealth</CardTitle>
+
+          {/* Description */}
           <CardDescription>
-            {isLogin ? 'Sign in to your account' : 'Create a new account'}
+            {isLogin ? 'Sign in to your isoHealth account' : 'Create a new isoHealth account'}
           </CardDescription>
         </CardHeader>
 
