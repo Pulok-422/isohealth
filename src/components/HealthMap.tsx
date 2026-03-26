@@ -15,7 +15,7 @@ import 'leaflet.markercluster/dist/MarkerCluster.css';
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
 import 'leaflet.markercluster';
 import { useAppState } from '@/context/AppContext';
-import { Layers, RotateCcw } from 'lucide-react';
+import { Layers } from 'lucide-react';
 import { MapLegend } from '@/components/MapLegend';
 import type { Facility } from '@/types/health';
 
@@ -37,7 +37,25 @@ const ISOCHRONE_BORDERS = [
   '#ad1457',
 ];
 
-function createFacilityIcon(type: string, isSimulated: boolean = false) {
+const BASEMAPS = {
+  positron: {
+    url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+    label: 'Light',
+    attribution: '&copy; CARTO',
+  },
+  osm: {
+    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    label: 'OSM',
+    attribution: '&copy; OpenStreetMap',
+  },
+  satellite: {
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    label: 'Satellite',
+    attribution: '&copy; Esri',
+  },
+};
+
+function createFacilityIcon(type: string, isSimulated = false) {
   const icons: Record<string, string> = {
     hospital: '🏥',
     clinic: '🏨',
@@ -106,24 +124,6 @@ const selectedLocationIcon = L.divIcon({
   iconAnchor: [14, 14],
   popupAnchor: [0, -12],
 });
-
-const BASEMAPS = {
-  positron: {
-    url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-    label: 'Light',
-    attribution: '&copy; CARTO',
-  },
-  osm: {
-    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    label: 'OSM',
-    attribution: '&copy; OpenStreetMap',
-  },
-  satellite: {
-    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-    label: 'Satellite',
-    attribution: '&copy; Esri',
-  },
-};
 
 function buildIsochroneSignature(data: any, transportProfile?: string, analysisType?: string) {
   if (!data?.features?.length) {
@@ -475,7 +475,6 @@ function ClusteredFacilityMarkers({ facilities }: { facilities: Facility[] }) {
       });
 
       marker.bindPopup(buildFacilityPopupHtml(f));
-
       cluster.addLayer(marker);
     });
 
@@ -624,36 +623,29 @@ function BasemapSwitcher({ basemap }: { basemap: keyof typeof BASEMAPS }) {
   return null;
 }
 
-let _setBasemapFn: ((b: keyof typeof BASEMAPS) => void) | null = null;
-let _currentBasemap: keyof typeof BASEMAPS = 'positron';
-
-function BasemapSyncInMap() {
-  const [basemap, setBasemap] = useState<keyof typeof BASEMAPS>('positron');
-
-  _setBasemapFn = (b) => {
-    setBasemap(b);
-    _currentBasemap = b;
-  };
-
-  return <BasemapSwitcher basemap={basemap} />;
-}
-
-function FloatingMapControl() {
+function FloatingMapControl({
+  basemap,
+  setBasemap,
+}: {
+  basemap: keyof typeof BASEMAPS;
+  setBasemap: React.Dispatch<React.SetStateAction<keyof typeof BASEMAPS>>;
+}) {
   const { state, dispatch } = useAppState();
   const [open, setOpen] = useState(false);
-  const [, forceRender] = useState(0);
 
   return (
     <div className="absolute top-3 right-3 z-[1000]">
       <button
-        onClick={() => setOpen(!open)}
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
         className="w-9 h-9 bg-card border border-border rounded-lg shadow-md flex items-center justify-center hover:bg-secondary transition-colors"
+        title="Map layers"
       >
         <Layers className="w-4 h-4 text-foreground" />
       </button>
 
       {open && (
-        <div className="mt-2 bg-card border border-border rounded-lg shadow-lg p-3 min-w-[180px] space-y-3">
+        <div className="absolute top-11 right-0 bg-card border border-border rounded-lg shadow-lg p-3 min-w-[190px] space-y-3">
           <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
             Layers
           </div>
@@ -662,9 +654,7 @@ function FloatingMapControl() {
             <input
               type="checkbox"
               checked={state.showFacilities}
-              onChange={() =>
-                dispatch({ type: 'TOGGLE_LAYER', payload: 'showFacilities' })
-              }
+              onChange={() => dispatch({ type: 'TOGGLE_LAYER', payload: 'showFacilities' })}
               className="rounded border-border"
             />
             Facilities
@@ -674,9 +664,7 @@ function FloatingMapControl() {
             <input
               type="checkbox"
               checked={state.showIsochrones}
-              onChange={() =>
-                dispatch({ type: 'TOGGLE_LAYER', payload: 'showIsochrones' })
-              }
+              onChange={() => dispatch({ type: 'TOGGLE_LAYER', payload: 'showIsochrones' })}
               className="rounded border-border"
             />
             Isochrones
@@ -687,16 +675,14 @@ function FloatingMapControl() {
               Basemap
             </div>
 
-            <div className="flex gap-1">
+            <div className="flex flex-wrap gap-1">
               {(Object.keys(BASEMAPS) as (keyof typeof BASEMAPS)[]).map((key) => (
                 <button
                   key={key}
-                  onClick={() => {
-                    _setBasemapFn?.(key);
-                    forceRender((n) => n + 1);
-                  }}
+                  type="button"
+                  onClick={() => setBasemap(key)}
                   className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
-                    _currentBasemap === key
+                    basemap === key
                       ? 'bg-primary/10 text-primary'
                       : 'text-muted-foreground hover:text-foreground'
                   }`}
@@ -713,8 +699,9 @@ function FloatingMapControl() {
 }
 
 export function HealthMap() {
-  const { state, dispatch } = useAppState();
+  const { state } = useAppState();
   const mapRef = useRef<L.Map | null>(null);
+  const [basemap, setBasemap] = useState<keyof typeof BASEMAPS>('positron');
 
   const allFacilities = useMemo(
     () => [...state.facilities, ...state.simulatedFacilities],
@@ -727,7 +714,6 @@ export function HealthMap() {
 
   const visibleFacilities = useMemo(() => {
     if (!outerGeometry) return [];
-
     return allFacilities.filter((facility) =>
       pointInGeometry([facility.lon, facility.lat], outerGeometry)
     );
@@ -764,7 +750,7 @@ export function HealthMap() {
           url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
         />
 
-        <BasemapSyncInMap />
+        <BasemapSwitcher basemap={basemap} />
         <MapUpdater />
         <MapClickHandler />
         <IsochroneFitter />
@@ -793,20 +779,8 @@ export function HealthMap() {
         )}
       </MapContainer>
 
-      <FloatingMapControl />
+      <FloatingMapControl basemap={basemap} setBasemap={setBasemap} />
       <MapLegend />
-
-      {(state.analysisResult || state.analysisPoint) && (
-        <div className="absolute top-3 right-14 z-[1000]">
-          <button
-            onClick={() => dispatch({ type: 'RESET_ANALYSIS' })}
-            className="w-9 h-9 bg-card border border-border rounded-lg shadow-md flex items-center justify-center hover:bg-destructive/10 hover:border-destructive/30 transition-colors"
-            title="Reset Analysis"
-          >
-            <RotateCcw className="w-4 h-4 text-muted-foreground" />
-          </button>
-        </div>
-      )}
 
       {state.isAnalyzing && (
         <div className="absolute inset-0 bg-background/40 backdrop-blur-sm flex items-center justify-center z-[1000]">
@@ -818,5 +792,6 @@ export function HealthMap() {
           </div>
         </div>
       )}
-
- 
+    </div>
+  );
+}
