@@ -1,4 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
+import { useEffect, useState } from 'react';
 import { useAppState } from '@/context/AppContext';
 import { AnalysisSettings, StickyAnalyzeButton } from './AnalysisSettings';
 import { SummaryTab } from './panels/SummaryTab';
@@ -15,6 +16,39 @@ const tabs = [
   { id: 'optimization', label: 'Optimize' },
   { id: 'export', label: 'Export' },
 ];
+
+function TypewriterText({
+  text,
+  speed = 70,
+}: {
+  text: string;
+  speed?: number;
+}) {
+  const [displayed, setDisplayed] = useState('');
+
+  useEffect(() => {
+    let index = 0;
+    setDisplayed('');
+
+    const timer = window.setInterval(() => {
+      index += 1;
+      setDisplayed(text.slice(0, index));
+
+      if (index >= text.length) {
+        window.clearInterval(timer);
+      }
+    }, speed);
+
+    return () => window.clearInterval(timer);
+  }, [text, speed]);
+
+  return (
+    <span className="inline-flex items-center justify-center">
+      <span>{displayed}</span>
+      <span className="ml-0.5 inline-block h-4 w-px bg-primary/70 animate-pulse" />
+    </span>
+  );
+}
 
 export function AnalyticsPanel() {
   const { state, dispatch } = useAppState();
@@ -58,14 +92,19 @@ export function AnalyticsPanel() {
 
         {state.activeTab === 'settings' && <StickyAnalyzeButton />}
 
-        <div className="border-t border-border px-4 py-3 text-center">
+        <div className="border-t border-border px-4 py-3">
           <a
             href="https://hasibulahmedpulok.vercel.app/"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            className="block rounded-lg border border-primary/15 bg-primary/5 px-3 py-2 text-center shadow-sm transition-colors hover:bg-primary/10"
           >
-            Developed by Hasibul Ahmed Pulok
+            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+              Developed by
+            </div>
+            <div className="mt-1 text-sm font-semibold text-primary">
+              <TypewriterText text="Hasibul Ahmed Pulok" />
+            </div>
           </a>
         </div>
       </div>
