@@ -60,10 +60,51 @@ function createFacilityIcon(type: string, isSimulated: boolean = false) {
 }
 
 const selectedLocationIcon = L.divIcon({
-  html: `<div style="width:20px;height:20px;background:hsl(210,80%,45%);border:3px solid white;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,0.3);"></div>`,
+  html: `
+    <div style="position: relative; width: 28px; height: 28px; display:flex; align-items:center; justify-content:center;">
+      <style>
+        @keyframes user-location-pulse {
+          0% {
+            transform: scale(0.9);
+            opacity: 0.85;
+          }
+          70% {
+            transform: scale(2.3);
+            opacity: 0;
+          }
+          100% {
+            transform: scale(2.3);
+            opacity: 0;
+          }
+        }
+      </style>
+      <div
+        style="
+          position:absolute;
+          width:18px;
+          height:18px;
+          border-radius:9999px;
+          background:rgba(220, 38, 38, 0.35);
+          animation:user-location-pulse 1.6s ease-out infinite;
+        "
+      ></div>
+      <div
+        style="
+          position:absolute;
+          width:14px;
+          height:14px;
+          background:#dc2626;
+          border:3px solid #ffffff;
+          border-radius:9999px;
+          box-shadow:0 0 0 2px rgba(220,38,38,0.25), 0 3px 10px rgba(0,0,0,0.35);
+        "
+      ></div>
+    </div>
+  `,
   className: '',
-  iconSize: [20, 20],
-  iconAnchor: [10, 10],
+  iconSize: [28, 28],
+  iconAnchor: [14, 14],
+  popupAnchor: [0, -12],
 });
 
 const BASEMAPS = {
@@ -165,6 +206,162 @@ function getOutermostIsochroneGeometry(isochrones: any) {
   });
 
   return outermost?.geometry ?? null;
+}
+
+function prettifyLabel(key: string) {
+  return key
+    .replace(/_/g, ' ')
+    .replace(/:/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function prettifyValue(value: unknown) {
+  if (value == null || value === '') return 'Not available';
+  return String(value)
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function escapeHtml(value: unknown) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function buildAddress(tags: Record<string, any>) {
+  const parts = [
+    tags['addr:housenumber'],
+    tags['addr:street'],
+    tags['addr:suburb'],
+    tags['addr:city'],
+    tags['addr:district'],
+  ].filter(Boolean);
+
+  return parts.length ? parts.join(', ') : null;
+}
+
+function buildFacilityPopupHtml(facility: Facility) {
+  const tags = (facility.tags ?? {}) as Record<string, any>;
+
+  const detailCandidates = [
+    { label: 'Operator', value: tags.operator || tags.brand || tags.network },
+    {
+      label: 'Service',
+      value: tags.healthcare || tags.amenity || tags['healthcare:speciality'] || facility.type,
+    },
+    { label: 'Specialty', value: tags['healthcare:speciality'] || tags.speciality },
+    { label: 'Emergency', value: tags.emergency },
+    { label: 'Opening Hours', value: tags.opening_hours },
+    { label: 'Phone', value: tags.phone || tags['contact:phone'] },
+    { label: 'Website', value: tags.website || tags['contact:website'] },
+    { label: 'Wheelchair Access', value: tags.wheelchair },
+    { label: 'Address', value: buildAddress(tags) || tags.address || tags['addr:full'] },
+  ].filter((item) => item.value != null && item.value !== '');
+
+  const shownDetails = detailCandidates.slice(0, 5);
+
+  const extraTagEntries = Object.entries(tags)
+    .filter(([key, value]) => {
+      if (value == null || value === '') return false;
+
+      const excludedKeys = new Set([
+        'operator',
+        'brand',
+        'network',
+        'healthcare',
+        'amenity',
+        'healthcare:speciality',
+        'speciality',
+        'emergency',
+        'opening_hours',
+        'phone',
+        'contact:phone',
+        'website',
+        'contact:website',
+        'wheelchair',
+        'address',
+        'addr:full',
+        'addr:housenumber',
+        'addr:street',
+        'addr:suburb',
+        'addr:city',
+        'addr:district',
+        'name',
+      ]);
+
+      return !excludedKeys.has(key);
+    })
+    .slice(0, 2);
+
+  const detailHtml = shownDetails.length
+    ? shownDetails
+        .map(
+          (item) => `
+            <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
+              <span style="color:#64748b;font-size:12px;white-space:nowrap;">${escapeHtml(
+                item.label
+              )}</span>
+              <span style="color:#0f172a;font-size:12px;font-weight:500;text-align:right;">${escapeHtml(
+                prettifyValue(item.value)
+              )}</span>
+            </div>
+          `
+        )
+        .join('')
+    : `
+      <div style="color:#64748b;font-size:12px;">
+        Basic facility information is available.
+      </div>
+    `;
+
+  const extraHtml = extraTagEntries.length
+    ? `
+      <div style="margin-top:8px;padding-top:8px;border-top:1px solid #e2e8f0;">
+        ${extraTagEntries
+          .map(
+            ([key, value]) => `
+              <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
+                <span style="color:#64748b;font-size:12px;white-space:nowrap;">${escapeHtml(
+                  prettifyLabel(key)
+                )}</span>
+                <span style="color:#0f172a;font-size:12px;font-weight:500;text-align:right;">${escapeHtml(
+                  prettifyValue(value)
+                )}</span>
+              </div>
+            `
+          )
+          .join('')}
+      </div>
+    `
+    : '';
+
+  return `
+    <div style="min-width:220px;max-width:260px;font-size:13px;line-height:1.45;">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px;">
+        <div>
+          <div style="font-weight:700;font-size:14px;color:#0f172a;">${escapeHtml(
+            facility.name || 'Unnamed Facility'
+          )}</div>
+          <div style="margin-top:4px;">
+            <span style="display:inline-flex;align-items:center;padding:2px 8px;border-radius:9999px;background:${
+              facility.isSimulated ? 'rgba(245, 158, 11, 0.12)' : 'rgba(37, 99, 235, 0.10)'
+            };color:${facility.isSimulated ? '#b45309' : '#1d4ed8'};font-size:11px;font-weight:600;text-transform:capitalize;">
+              ${escapeHtml(facility.type)}${facility.isSimulated ? ' • Simulated' : ''}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        ${detailHtml}
+      </div>
+
+      ${extraHtml}
+    </div>
+  `;
 }
 
 function MapUpdater() {
@@ -277,9 +474,7 @@ function ClusteredFacilityMarkers({ facilities }: { facilities: Facility[] }) {
         icon: createFacilityIcon(f.type, f.isSimulated),
       });
 
-      marker.bindPopup(
-        `<div style="font-size:13px"><strong>${f.name}</strong><br/><span style="text-transform:capitalize">${f.type}${f.isSimulated ? ' (Simulated)' : ''}</span><br/><code>${f.lat.toFixed(4)}, ${f.lon.toFixed(4)}</code></div>`
-      );
+      marker.bindPopup(buildFacilityPopupHtml(f));
 
       cluster.addLayer(marker);
     });
@@ -338,9 +533,9 @@ function AnalysisPointMarker() {
     <Marker position={state.analysisPoint} icon={selectedLocationIcon}>
       <Popup>
         <div className="text-sm">
-          <div className="font-semibold">📍 Selected Location</div>
-          <div className="text-xs font-mono text-muted-foreground">
-            {state.analysisPoint[0].toFixed(4)}, {state.analysisPoint[1].toFixed(4)}
+          <div className="font-semibold text-red-600">📍 You are here!</div>
+          <div className="text-xs text-muted-foreground">
+            This is your selected location.
           </div>
         </div>
       </Popup>
