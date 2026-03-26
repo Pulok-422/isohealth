@@ -1,8 +1,8 @@
 import { useAppState } from '@/context/AppContext';
 import { useAnalysis } from '@/hooks/useAnalysis';
-import { Footprints, Car, Bike, Play, Loader2, Clock, Ruler, Database } from 'lucide-react';
+import { Footprints, Car, Bike, Play, Loader2, Clock, Ruler } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import type { TransportProfile, AnalysisType, PopulationSource } from '@/types/health';
+import type { TransportProfile, AnalysisType } from '@/types/health';
 
 const transportModes: { id: TransportProfile; icon: typeof Car; label: string; defaultSpeed: number }[] = [
   { id: 'foot-walking', icon: Footprints, label: 'Walking', defaultSpeed: 5 },
@@ -10,8 +10,8 @@ const transportModes: { id: TransportProfile; icon: typeof Car; label: string; d
   { id: 'driving-car', icon: Car, label: 'Driving', defaultSpeed: 40 },
 ];
 
-const TIME_PRESETS = [10, 20, 30, 40, 50, 60]; // minutes
-const DISTANCE_PRESETS = [1, 2, 3, 4, 5, 6]; // km
+const TIME_PRESETS = [10, 20, 30, 40, 50, 60];
+const DISTANCE_PRESETS = [1, 2, 3, 4, 5, 6];
 
 export function AnalysisSettings() {
   const { state, dispatch } = useAppState();
@@ -31,7 +31,6 @@ export function AnalysisSettings() {
         Analysis Settings
       </div>
 
-      {/* Transport Mode */}
       <div className="space-y-1.5">
         <label className="text-xs font-medium text-foreground">Transport Mode</label>
         <div className="flex gap-1 bg-secondary rounded-lg p-1">
@@ -52,7 +51,6 @@ export function AnalysisSettings() {
         </div>
       </div>
 
-      {/* Analysis Type */}
       <div className="space-y-1.5">
         <label className="text-xs font-medium text-foreground">Analysis Type</label>
         <div className="flex gap-1 bg-secondary rounded-lg p-1">
@@ -76,7 +74,6 @@ export function AnalysisSettings() {
         </div>
       </div>
 
-      {/* Range Bands */}
       <div className="space-y-1.5">
         <label className="text-xs font-medium text-foreground">
           Range Bands ({state.analysisType === 'time' ? 'minutes' : 'km'})
@@ -85,7 +82,8 @@ export function AnalysisSettings() {
           {(state.analysisType === 'time' ? TIME_PRESETS : DISTANCE_PRESETS).map((val) => {
             const inSeconds = val * 60;
             const inMeters = val * 1000;
-            const thresholds = state.analysisType === 'time' ? state.timeThresholds : state.distanceThresholds;
+            const thresholds =
+              state.analysisType === 'time' ? state.timeThresholds : state.distanceThresholds;
             const targetVal = state.analysisType === 'time' ? inSeconds : inMeters;
             const isActive = thresholds.includes(targetVal);
 
@@ -93,12 +91,19 @@ export function AnalysisSettings() {
               <button
                 key={val}
                 onClick={() => {
-                  const actionType = state.analysisType === 'time' ? 'SET_THRESHOLDS' : 'SET_DISTANCE_THRESHOLDS';
+                  const actionType =
+                    state.analysisType === 'time' ? 'SET_THRESHOLDS' : 'SET_DISTANCE_THRESHOLDS';
+
                   if (isActive) {
-                    const next = thresholds.filter(t => t !== targetVal);
-                    if (next.length > 0) dispatch({ type: actionType, payload: next });
+                    const next = thresholds.filter((t) => t !== targetVal);
+                    if (next.length > 0) {
+                      dispatch({ type: actionType, payload: next });
+                    }
                   } else {
-                    dispatch({ type: actionType, payload: [...thresholds, targetVal].sort((a, b) => a - b) });
+                    dispatch({
+                      type: actionType,
+                      payload: [...thresholds, targetVal].sort((a, b) => a - b),
+                    });
                   }
                 }}
                 className={`px-2.5 py-1.5 rounded-md text-xs font-medium border transition-colors ${
@@ -114,33 +119,6 @@ export function AnalysisSettings() {
         </div>
       </div>
 
-      {/* Population Source */}
-      <div className="space-y-1.5">
-        <label className="text-xs font-medium text-foreground flex items-center gap-1.5">
-          <Database className="w-3.5 h-3.5" />
-          Population Source
-        </label>
-        <div className="flex gap-1 bg-secondary rounded-lg p-1">
-          {([
-            { id: 'worldpop' as PopulationSource, label: 'WorldPop' },
-            { id: 'simulated' as PopulationSource, label: 'Simulated' },
-          ]).map(({ id, label }) => (
-            <button
-              key={id}
-              onClick={() => dispatch({ type: 'SET_POPULATION_SOURCE', payload: id })}
-              className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-md text-xs font-medium transition-colors ${
-                state.populationSource === id
-                  ? 'bg-primary text-primary-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Speed */}
       <div className="space-y-1.5">
         <label className="text-xs font-medium text-foreground">Speed (km/h)</label>
         <input
@@ -148,10 +126,14 @@ export function AnalysisSettings() {
           min={1}
           max={200}
           value={state.speed}
-          onChange={(e) => dispatch({ type: 'SET_SPEED', payload: Number(e.target.value) || 5 })}
+          onChange={(e) =>
+            dispatch({ type: 'SET_SPEED', payload: Number(e.target.value) || 5 })
+          }
           className="w-full h-8 px-3 bg-secondary border border-border rounded-md text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
         />
-        <p className="text-[10px] text-muted-foreground">Used for estimation display. ORS uses profile-based routing.</p>
+        <p className="text-[10px] text-muted-foreground">
+          Used for estimation display. ORS uses profile-based routing.
+        </p>
       </div>
 
       {!state.analysisPoint && (
@@ -183,7 +165,11 @@ export function StickyAnalyzeButton() {
         className="w-full gap-2"
         size="sm"
       >
-        {state.isAnalyzing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+        {state.isAnalyzing ? (
+          <Loader2 className="w-4 h-4 animate-spin" />
+        ) : (
+          <Play className="w-4 h-4" />
+        )}
         {state.isAnalyzing ? 'Analyzing...' : 'Analyze Accessibility'}
       </Button>
     </div>
