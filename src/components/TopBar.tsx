@@ -23,6 +23,55 @@ import {
 import { useCallback, useMemo, useRef, useState, useEffect } from 'react';
 import { toast } from 'sonner';
 
+type ReverseGeocodeResult = {
+  address?: {
+    suburb?: string;
+    neighbourhood?: string;
+    quarter?: string;
+    village?: string;
+    town?: string;
+    city?: string;
+    municipality?: string;
+    county?: string;
+    state_district?: string;
+    state?: string;
+    country?: string;
+  };
+  display_name?: string;
+};
+
+function pickReadableAreaName(data: ReverseGeocodeResult | null) {
+  if (!data) return '';
+
+  const address = data.address ?? {};
+
+  const primary =
+    address.suburb ||
+    address.neighbourhood ||
+    address.quarter ||
+    address.village ||
+    address.town ||
+    address.city ||
+    address.municipality ||
+    address.county;
+
+  const secondary =
+    address.city ||
+    address.town ||
+    address.municipality ||
+    address.state_district ||
+    address.state;
+
+  const country = address.country;
+
+  const parts = [primary, secondary, country].filter(
+    (value, index, arr) => value && arr.indexOf(value) === index
+  );
+
+  if (parts.length > 0) return parts.join(', ');
+  return data.display_name || '';
+}
+
 export function TopBar() {
   const { state, dispatch } = useAppState();
   const { user, signOut, isAdmin } = useAuth();
@@ -31,6 +80,7 @@ export function TopBar() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [locating, setLocating] = useState(false);
+  const [locationLabel, setLocationLabel] = useState('');
   const searchWrapRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -49,6 +99,27 @@ export function TopBar() {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [searchOpen]);
+
+  const reverseGeocode = useCallback(async (lat: number, lon: number) => {
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}`
+      );
+
+      if (!res.ok) throw new Error('Reverse geocoding failed');
+
+      const data = (await res.json()) as ReverseGeocodeResult;
+      const readable = pickReadableAreaName(data);
+
+      if (readable) {
+        setLocationLabel(readable);
+      } else {
+        setLocationLabel('');
+      }
+    } catch {
+      setLocationLabel('');
+    }
+  }, []);
 
   const handleSearch = useCallback(async () => {
     if (!searchQuery.trim()) return;
@@ -70,6 +141,7 @@ export function TopBar() {
         dispatch({ type: 'SET_ZOOM', payload: 13 });
         dispatch({ type: 'SET_ANALYSIS_POINT', payload: [latNum, lonNum] });
 
+        setLocationLabel(display_name || '');
         toast.success('Location selected');
         setSearchOpen(false);
         setSearchQuery(display_name || searchQuery);
@@ -95,12 +167,14 @@ export function TopBar() {
     setLocating(true);
 
     navigator.geolocation.getCurrentPosition(
-      (position) => {
+      async (position) => {
         const { latitude, longitude } = position.coords;
 
         dispatch({ type: 'SET_CENTER', payload: [latitude, longitude] });
         dispatch({ type: 'SET_ZOOM', payload: 14 });
         dispatch({ type: 'SET_ANALYSIS_POINT', payload: [latitude, longitude] });
+
+        await reverseGeocode(latitude, longitude);
 
         setLocating(false);
         toast.success('Current location set');
@@ -113,9 +187,21 @@ export function TopBar() {
     );
   };
 
+  useEffect(() => {
+    if (!state.analysisPoint) {
+      setLocationLabel('');
+      return;
+    }
+
+    if (searchQuery && locationLabel && locationLabel === searchQuery) return;
+
+    reverseGeocode(state.analysisPoint[0], state.analysisPoint[1]);
+  }, [state.analysisPoint, reverseGeocode]); // intentional: keep independent from searchQuery/locationLabel changes
+
   const handleReset = () => {
     dispatch({ type: 'RESET_ANALYSIS' });
     setSearchQuery('');
+    setLocationLabel('');
     toast.success('Analysis reset');
   };
 
@@ -123,9 +209,7 @@ export function TopBar() {
     const parts: string[] = [];
 
     if (state.analysisPoint) {
-      parts.push(
-        `${state.analysisPoint[0].toFixed(3)}, ${state.analysisPoint[1].toFixed(3)}`
-      );
+      parts.push(locationLabel || 'Selected location');
     } else {
       parts.push('No location selected');
     }
@@ -155,6 +239,7 @@ export function TopBar() {
     state.timeThresholds,
     state.distanceThresholds,
     state.isAnalyzing,
+    locationLabel,
   ]);
 
   return (
