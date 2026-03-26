@@ -99,6 +99,74 @@ function buildIsochroneSignature(data: any, transportProfile?: string, analysisT
   return `${transportProfile || 'na'}|${analysisType || 'na'}|${parts.join('|')}`;
 }
 
+function pointInRing(point: [number, number], ring: number[][]) {
+  const [x, y] = point;
+  let inside = false;
+
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0];
+    const yi = ring[i][1];
+    const xj = ring[j][0];
+    const yj = ring[j][1];
+
+    const intersect =
+      yi > y !== yj > y &&
+      x < ((xj - xi) * (y - yi)) / ((yj - yi) || Number.EPSILON) + xi;
+
+    if (intersect) inside = !inside;
+  }
+
+  return inside;
+}
+
+function pointInPolygonCoords(point: [number, number], polygonCoords: number[][][]) {
+  if (!polygonCoords?.length) return false;
+
+  const outerRing = polygonCoords[0];
+  if (!pointInRing(point, outerRing)) return false;
+
+  for (let i = 1; i < polygonCoords.length; i++) {
+    if (pointInRing(point, polygonCoords[i])) return false;
+  }
+
+  return true;
+}
+
+function pointInGeometry(point: [number, number], geometry: any) {
+  if (!geometry) return false;
+
+  if (geometry.type === 'Polygon') {
+    return pointInPolygonCoords(point, geometry.coordinates);
+  }
+
+  if (geometry.type === 'MultiPolygon') {
+    return geometry.coordinates.some((polygonCoords: number[][][]) =>
+      pointInPolygonCoords(point, polygonCoords)
+    );
+  }
+
+  return false;
+}
+
+function getOutermostIsochroneGeometry(isochrones: any) {
+  const features = isochrones?.features;
+  if (!features?.length) return null;
+
+  const validFeatures = features.filter(
+    (f: any) => f?.geometry && f?.properties?.value != null
+  );
+
+  if (!validFeatures.length) return null;
+
+  const outermost = validFeatures.reduce((maxFeature: any, current: any) => {
+    const maxValue = Number(maxFeature?.properties?.value ?? -Infinity);
+    const currentValue = Number(current?.properties?.value ?? -Infinity);
+    return currentValue > maxValue ? current : maxFeature;
+  });
+
+  return outermost?.geometry ?? null;
+}
+
 function MapUpdater() {
   const { state } = useAppState();
   const map = useMap();
@@ -462,6 +530,18 @@ export function HealthMap() {
     [state.facilities, state.simulatedFacilities]
   );
 
+  const outerGeometry = useMemo(() => {
+    return getOutermostIsochroneGeometry(state.analysisResult?.isochrones);
+  }, [state.analysisResult?.isochrones]);
+
+  const visibleFacilities = useMemo(() => {
+    if (!outerGeometry) return [];
+
+    return allFacilities.filter((facility) =>
+      pointInGeometry([facility.lon, facility.lat], outerGeometry)
+    );
+  }, [allFacilities, outerGeometry]);
+
   const isochroneRenderSignature = useMemo(() => {
     return buildIsochroneSignature(
       state.analysisResult?.isochrones,
@@ -506,8 +586,8 @@ export function HealthMap() {
           />
         )}
 
-        {state.showFacilities && allFacilities.length > 0 && (
-          <ClusteredFacilityMarkers facilities={allFacilities} />
+        {state.showFacilities && visibleFacilities.length > 0 && (
+          <ClusteredFacilityMarkers facilities={visibleFacilities} />
         )}
 
         <OptimizationMarkers />
