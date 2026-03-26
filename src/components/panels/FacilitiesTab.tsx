@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useAppState } from '@/context/AppContext';
-import { Search } from 'lucide-react';
+import { Search, MapPin } from 'lucide-react';
 
 const typeColors: Record<string, string> = {
   hospital: 'bg-destructive/20 text-destructive',
@@ -20,24 +20,34 @@ export function FacilitiesTab() {
     [state.facilities, state.simulatedFacilities]
   );
 
-  const filtered = useMemo(() => {
-    return allFacilities.filter((f) => {
-      if (typeFilter && f.type !== typeFilter) return false;
-      if (search && !f.name.toLowerCase().includes(search.toLowerCase())) return false;
-      return true;
-    });
-  }, [allFacilities, search, typeFilter]);
+  // Empty state
+  if (!state.analysisResult && allFacilities.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 text-center space-y-4 p-6">
+        <MapPin className="w-12 h-12 text-muted-foreground/30" />
+        <div>
+          <h3 className="text-sm font-medium text-foreground">No Analysis Yet</h3>
+          <p className="text-xs text-muted-foreground mt-1">
+            Click on the map or search a location, then click <strong>Analyze Accessibility</strong> to begin.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
-  const types = useMemo(() => {
-    const counts: Record<string, number> = {};
-    allFacilities.forEach((f) => {
-      counts[f.type] = (counts[f.type] || 0) + 1;
-    });
-    return counts;
-  }, [allFacilities]);
+  const filtered = allFacilities.filter((f) => {
+    if (typeFilter && f.type !== typeFilter) return false;
+    if (search && !f.name.toLowerCase().includes(search.toLowerCase())) return false;
+    return true;
+  });
+
+  const types: Record<string, number> = {};
+  allFacilities.forEach((f) => {
+    types[f.type] = (types[f.type] || 0) + 1;
+  });
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 p-3">
       {/* Search */}
       <div className="relative">
         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
@@ -93,9 +103,9 @@ export function FacilitiesTab() {
             </div>
           </div>
         ))}
-        {filtered.length === 0 && (
+        {filtered.length === 0 && allFacilities.length > 0 && (
           <div className="text-center text-xs text-muted-foreground py-8">
-            No facilities found
+            No facilities match your filter
           </div>
         )}
         {filtered.length > 50 && (

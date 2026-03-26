@@ -2,12 +2,12 @@ import { useCallback } from 'react';
 import { useAppState } from '@/context/AppContext';
 import { fetchFacilities, generateIsochrones } from '@/lib/api';
 import {
-  generatePopulationGrid,
   calculateCoverage,
   findUnderservedClusters,
   suggestFacilityLocations,
   haversine,
 } from '@/lib/analysis';
+import { getBBoxFromIsochrones, getPopulationData } from '@/lib/population';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -103,16 +103,13 @@ export function useAnalysis() {
       dispatch({ type: 'SET_ANALYSIS_POINT', payload: [lat, lon] });
 
       try {
-        const analysisType =
-          state.settings?.analysisType ?? state.analysisType ?? 'time';
-
-        const transportProfile =
-          state.settings?.transportMode ?? state.transportProfile ?? 'driving-car';
+        const analysisType = state.analysisType ?? 'time';
+        const transportProfile = state.transportProfile ?? 'foot-walking';
 
         const ranges =
           analysisType === 'distance'
-            ? state.settings?.distanceBands ?? state.distanceThresholds ?? []
-            : state.settings?.timeBands ?? state.timeThresholds ?? [];
+            ? state.distanceThresholds ?? []
+            : state.timeThresholds ?? [];
 
         const rangeType = analysisType;
 
@@ -158,7 +155,20 @@ export function useAnalysis() {
 
         dispatch({ type: 'SET_FACILITIES', payload: facilities });
 
-        const popGrid = generatePopulationGrid(lat, lon);
+        // Fetch population data using bbox from isochrones
+        const bbox = getBBoxFromIsochrones(isochrones);
+        let popGrid;
+        let usedSource = state.populationSource;
+
+        if (bbox) {
+          popGrid = await getPopulationData(bbox, state.populationSource);
+        } else {
+          // Fallback: generate around analysis point
+          const { generatePopulationGrid } = await import('@/lib/analysis');
+          popGrid = generatePopulationGrid(lat, lon);
+          usedSource = 'simulated';
+        }
+
         dispatch({ type: 'SET_POPULATION', payload: popGrid });
 
         const coverage = calculateCoverage(popGrid, isochrones);
@@ -173,7 +183,7 @@ export function useAnalysis() {
           : allFacilities;
 
         let nearestFacility = null;
-        let nearestDistance = null;
+        let nearestDistance: number | null = null;
 
         if (reachableFacilities.length > 0) {
           let minDist = Infinity;
@@ -192,7 +202,6 @@ export function useAnalysis() {
           type: 'SET_ANALYSIS_RESULT',
           payload: {
             facilities: reachableFacilities,
-            allFacilities,
             reachableFacilityCount: reachableFacilities.length,
             totalFacilityCount: allFacilities.length,
             isochrones,
@@ -205,6 +214,7 @@ export function useAnalysis() {
             profileUsed: transportProfile,
             analysisTypeUsed: rangeType,
             rangesUsed: ranges,
+            populationSource: usedSource,
           },
         });
 
@@ -245,7 +255,7 @@ export function useAnalysis() {
       state.timeThresholds,
       state.distanceThresholds,
       state.simulatedFacilities,
-      state.settings,
+      state.populationSource,
       dispatch,
     ]
   );

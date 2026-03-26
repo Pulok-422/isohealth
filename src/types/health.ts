@@ -16,8 +16,12 @@ export interface PopulationPoint {
 
 import type { FeatureCollection } from 'geojson';
 
+export type PopulationSource = 'worldpop' | 'simulated';
+
 export interface AnalysisResult {
   facilities: Facility[];
+  reachableFacilityCount?: number;
+  totalFacilityCount?: number;
   isochrones: FeatureCollection | null;
   nearestFacility: Facility | null;
   nearestDistance: number | null;
@@ -25,6 +29,10 @@ export interface AnalysisResult {
   populationCovered: number;
   populationUnderserved: number;
   totalPopulation: number;
+  profileUsed?: string;
+  analysisTypeUsed?: string;
+  rangesUsed?: number[];
+  populationSource?: PopulationSource;
 }
 
 export interface Scenario {
@@ -62,4 +70,5 @@ export interface AppState {
   showPopulation: boolean;
   showUnderserved: boolean;
   simulationMode: boolean;
+  populationSource: PopulationSource;
 }

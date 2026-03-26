@@ -371,9 +371,8 @@ function SortedIsochrones({
       (a: any, b: any) => Number(b.properties?.value ?? 0) - Number(a.properties?.value ?? 0)
     );
 
-    const ascValues = [...new Set(validFeatures.map((f: any) => Number(f.properties?.value)))].sort(
-      (a, b) => a - b
-    );
+    const valuesSet = new Set<number>(validFeatures.map((f: any) => Number(f.properties?.value)));
+    const ascValues: number[] = Array.from(valuesSet).sort((a: number, b: number) => a - b);
 
     return { features: featuresDesc, ascValues };
   }, [data]);

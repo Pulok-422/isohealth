@@ -1,6 +1,6 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAppState } from '@/context/AppContext';
-import { AnalysisSettings } from './AnalysisSettings';
+import { AnalysisSettings, StickyAnalyzeButton } from './AnalysisSettings';
 import { SummaryTab } from './panels/SummaryTab';
 import { FacilitiesTab } from './panels/FacilitiesTab';
 import { SimulationTab } from './panels/SimulationTab';
@@ -35,7 +35,7 @@ export function AnalyticsPanel() {
         ))}
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto min-h-0">
         <AnimatePresence mode="wait">
           <motion.div
             key={state.activeTab}
@@ -53,6 +53,8 @@ export function AnalyticsPanel() {
           </motion.div>
         </AnimatePresence>
       </div>
+
+      <StickyAnalyzeButton />
     </div>
   );
 }
