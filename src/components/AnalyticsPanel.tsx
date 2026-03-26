@@ -43,9 +43,9 @@ function TypewriterText({
   }, [text, speed]);
 
   return (
-    <span className="inline-flex items-center justify-center">
-      <span>{displayed}</span>
-      <span className="ml-0.5 inline-block h-4 w-px bg-primary/70 animate-pulse" />
+    <span className="inline-flex max-w-full items-center whitespace-nowrap overflow-hidden">
+      <span className="truncate">{displayed}</span>
+      <span className="ml-0.5 inline-block h-4 w-px shrink-0 bg-primary/70 animate-pulse" />
     </span>
   );
 }
@@ -102,7 +102,7 @@ export function AnalyticsPanel() {
             <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
               Developed by
             </div>
-            <div className="mt-1 text-sm font-semibold text-primary">
+            <div className="mt-1 w-full overflow-hidden whitespace-nowrap text-sm font-semibold text-primary">
               <TypewriterText text="Hasibul Ahmed Pulok" />
             </div>
           </a>
