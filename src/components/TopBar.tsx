@@ -148,7 +148,14 @@ export function TopBar() {
     }
 
     return parts.join(' • ');
-  }, [state.analysisPoint, state.transportProfile, state.analysisType, state.timeThresholds, state.distanceThresholds, state.isAnalyzing]);
+  }, [
+    state.analysisPoint,
+    state.transportProfile,
+    state.analysisType,
+    state.timeThresholds,
+    state.distanceThresholds,
+    state.isAnalyzing,
+  ]);
 
   return (
     <header className="bg-white border-b border-gray-200 shadow-[0_1px_2px_rgba(0,0,0,0.05)] z-50 relative">
@@ -185,7 +192,7 @@ export function TopBar() {
             </Button>
 
             {searchOpen && (
-              <div className="absolute right-0 top-11 w-[280px] sm:w-[340px] bg-white border border-gray-200 rounded-xl shadow-lg p-2 z-50">
+              <div className="absolute right-full top-1/2 mr-2 -translate-y-1/2 w-[280px] sm:w-[340px] bg-white border border-gray-200 rounded-xl shadow-lg p-2 z-50">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <input
