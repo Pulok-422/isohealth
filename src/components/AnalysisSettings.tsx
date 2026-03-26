@@ -1,8 +1,8 @@
 import { useAppState } from '@/context/AppContext';
 import { useAnalysis } from '@/hooks/useAnalysis';
-import { Footprints, Car, Bike, Play, Loader2, Clock, Ruler } from 'lucide-react';
+import { Footprints, Car, Bike, Play, Loader2, Clock, Ruler, Database } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import type { TransportProfile, AnalysisType } from '@/types/health';
+import type { TransportProfile, AnalysisType, PopulationSource } from '@/types/health';
 
 const transportModes: { id: TransportProfile; icon: typeof Car; label: string; defaultSpeed: number }[] = [
   { id: 'foot-walking', icon: Footprints, label: 'Walking', defaultSpeed: 5 },
@@ -114,6 +114,32 @@ export function AnalysisSettings() {
         </div>
       </div>
 
+      {/* Population Source */}
+      <div className="space-y-1.5">
+        <label className="text-xs font-medium text-foreground flex items-center gap-1.5">
+          <Database className="w-3.5 h-3.5" />
+          Population Source
+        </label>
+        <div className="flex gap-1 bg-secondary rounded-lg p-1">
+          {([
+            { id: 'worldpop' as PopulationSource, label: 'WorldPop' },
+            { id: 'simulated' as PopulationSource, label: 'Simulated' },
+          ]).map(({ id, label }) => (
+            <button
+              key={id}
+              onClick={() => dispatch({ type: 'SET_POPULATION_SOURCE', payload: id })}
+              className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-md text-xs font-medium transition-colors ${
+                state.populationSource === id
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Speed */}
       <div className="space-y-1.5">
         <label className="text-xs font-medium text-foreground">Speed (km/h)</label>
@@ -128,7 +154,29 @@ export function AnalysisSettings() {
         <p className="text-[10px] text-muted-foreground">Used for estimation display. ORS uses profile-based routing.</p>
       </div>
 
-      {/* Analyze Button */}
+      {!state.analysisPoint && (
+        <p className="text-[10px] text-muted-foreground text-center">
+          Select a location on the map, search, or use My Location first.
+        </p>
+      )}
+    </div>
+  );
+}
+
+export function StickyAnalyzeButton() {
+  const { state } = useAppState();
+  const { runAnalysis } = useAnalysis();
+
+  const handleAnalyze = () => {
+    if (state.analysisPoint) {
+      runAnalysis(state.analysisPoint[0], state.analysisPoint[1]);
+    } else {
+      runAnalysis(state.center[0], state.center[1]);
+    }
+  };
+
+  return (
+    <div className="sticky bottom-0 p-3 bg-card/95 backdrop-blur-sm border-t border-border">
       <Button
         onClick={handleAnalyze}
         disabled={state.isAnalyzing}
@@ -138,12 +186,6 @@ export function AnalysisSettings() {
         {state.isAnalyzing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
         {state.isAnalyzing ? 'Analyzing...' : 'Analyze Accessibility'}
       </Button>
-
-      {!state.analysisPoint && (
-        <p className="text-[10px] text-muted-foreground text-center">
-          Select a location on the map, search, or use My Location first.
-        </p>
-      )}
     </div>
   );
 }

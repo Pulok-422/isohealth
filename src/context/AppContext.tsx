@@ -1,5 +1,5 @@
 import { createContext, useContext, useReducer, type ReactNode } from 'react';
-import type { AppState, Facility, AnalysisResult, Scenario, TransportProfile, AnalysisType, OptimizationResult, PopulationPoint } from '@/types/health';
+import type { AppState, Facility, AnalysisResult, Scenario, TransportProfile, AnalysisType, OptimizationResult, PopulationPoint, PopulationSource } from '@/types/health';
 
 interface State extends AppState {
   facilities: Facility[];
@@ -42,6 +42,7 @@ type Action =
   | { type: 'SET_OPTIMIZATION'; payload: OptimizationResult[] }
   | { type: 'SET_ROUTE'; payload: any }
   | { type: 'SET_SEARCH_RADIUS'; payload: number }
+  | { type: 'SET_POPULATION_SOURCE'; payload: PopulationSource }
   | { type: 'RESET_ANALYSIS' };
 
 const initialState: State = {
@@ -50,9 +51,9 @@ const initialState: State = {
   transportProfile: 'foot-walking',
   analysisPoint: null,
   analysisType: 'time',
-  timeThresholds: [600, 1200, 1800, 2400, 3000, 3600], // 10-60 min in seconds
-  distanceThresholds: [1000, 2000, 3000, 4000, 5000, 6000], // 1-6 km in meters
-  speed: 5, // km/h for walking
+  timeThresholds: [600, 1200, 1800, 2400, 3000, 3600],
+  distanceThresholds: [1000, 2000, 3000, 4000, 5000, 6000],
+  speed: 5,
   searchRadius: 10000,
   activeTab: 'settings',
   isAnalyzing: false,
@@ -61,6 +62,7 @@ const initialState: State = {
   showPopulation: false,
   showUnderserved: false,
   simulationMode: false,
+  populationSource: 'worldpop',
   facilities: [],
   simulatedFacilities: [],
   analysisResult: null,
@@ -96,6 +98,7 @@ function reducer(state: State, action: Action): State {
     case 'SET_OPTIMIZATION': return { ...state, optimizationResults: action.payload };
     case 'SET_ROUTE': return { ...state, routeGeoJson: action.payload };
     case 'SET_SEARCH_RADIUS': return { ...state, searchRadius: action.payload };
+    case 'SET_POPULATION_SOURCE': return { ...state, populationSource: action.payload };
     case 'RESET_ANALYSIS': return { ...state, analysisPoint: null, analysisResult: null, facilities: [], populationGrid: [], optimizationResults: [], routeGeoJson: null };
     default: return state;
   }

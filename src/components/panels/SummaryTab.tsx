@@ -1,4 +1,4 @@
-import { Building2, MapPin, Users, AlertTriangle, Clock, Ruler, Save } from 'lucide-react';
+import { Building2, MapPin, Users, AlertTriangle, Clock, Ruler, Save, Database } from 'lucide-react';
 import { useAppState } from '@/context/AppContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -53,12 +53,12 @@ export function SummaryTab() {
 
   if (!result) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 text-center space-y-4">
+      <div className="flex flex-col items-center justify-center h-64 text-center space-y-4 p-6">
         <MapPin className="w-12 h-12 text-muted-foreground/30" />
         <div>
           <h3 className="text-sm font-medium text-foreground">No Analysis Yet</h3>
           <p className="text-xs text-muted-foreground mt-1">
-            Click on the map or search a location to begin analysis
+            Click on the map or search a location, then click <strong>Analyze Accessibility</strong> to begin.
           </p>
         </div>
       </div>
@@ -82,7 +82,7 @@ export function SummaryTab() {
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 p-3">
       {/* Save button */}
       {user && (
         <Button size="sm" variant="outline" onClick={handleSave} disabled={saving} className="w-full gap-1.5">
@@ -90,6 +90,12 @@ export function SummaryTab() {
           {saving ? 'Saving...' : 'Save Analysis'}
         </Button>
       )}
+
+      {/* Population Source Badge */}
+      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <Database className="w-3 h-3" />
+        Population Source: <span className="font-medium text-foreground capitalize">{result.populationSource || 'simulated'}</span>
+      </div>
 
       {/* KPIs */}
       <div className="grid grid-cols-2 gap-2">

@@ -1,6 +1,6 @@
 import { useAppState } from '@/context/AppContext';
 import { useAnalysis } from '@/hooks/useAnalysis';
-import { Trash2, RefreshCw } from 'lucide-react';
+import { Trash2, RefreshCw, MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 export function SimulationTab() {
@@ -13,8 +13,23 @@ export function SimulationTab() {
     }
   };
 
+  // Empty state
+  if (!state.analysisResult && state.simulatedFacilities.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 text-center space-y-4 p-6">
+        <MapPin className="w-12 h-12 text-muted-foreground/30" />
+        <div>
+          <h3 className="text-sm font-medium text-foreground">No Analysis Yet</h3>
+          <p className="text-xs text-muted-foreground mt-1">
+            Click on the map or search a location, then click <strong>Analyze Accessibility</strong> to begin.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 p-3">
       <div className="data-card">
         <span className="kpi-label">Intervention Simulation</span>
         <p className="text-xs text-muted-foreground mt-1">

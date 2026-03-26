@@ -130,20 +130,16 @@ export function TopBar() {
       parts.push('No location selected');
     }
 
-    if (state.settings?.transportMode) {
-      const mode =
-        state.settings.transportMode.charAt(0).toUpperCase() +
-        state.settings.transportMode.slice(1);
-      parts.push(mode);
-    }
+    const mode = state.transportProfile.replace('-', ' ');
+    parts.push(mode.charAt(0).toUpperCase() + mode.slice(1));
 
-    if (state.settings?.analysisType === 'time' && state.settings?.timeBands?.length) {
-      const maxBand = Math.max(...state.settings.timeBands);
+    if (state.analysisType === 'time' && state.timeThresholds.length) {
+      const maxBand = Math.max(...state.timeThresholds) / 60;
       parts.push(`${maxBand} min`);
     }
 
-    if (state.settings?.analysisType === 'distance' && state.settings?.distanceBands?.length) {
-      const maxBand = Math.max(...state.settings.distanceBands);
+    if (state.analysisType === 'distance' && state.distanceThresholds.length) {
+      const maxBand = Math.max(...state.distanceThresholds) / 1000;
       parts.push(`${maxBand} km`);
     }
 
@@ -152,7 +148,7 @@ export function TopBar() {
     }
 
     return parts.join(' • ');
-  }, [state.analysisPoint, state.settings, state.isAnalyzing]);
+  }, [state.analysisPoint, state.transportProfile, state.analysisType, state.timeThresholds, state.distanceThresholds, state.isAnalyzing]);
 
   return (
     <header className="bg-white border-b border-gray-200 shadow-[0_1px_2px_rgba(0,0,0,0.05)] z-50 relative">
