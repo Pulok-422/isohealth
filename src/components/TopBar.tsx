@@ -177,7 +177,7 @@ export function TopBar() {
         await reverseGeocode(latitude, longitude);
 
         setLocating(false);
-        toast.success('Current location set');
+        toast.success('Detected your current location');
       },
       () => {
         setLocating(false);
