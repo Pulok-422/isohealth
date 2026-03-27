@@ -155,7 +155,7 @@ export function useAnalysis() {
 
         const bbox = getBBoxFromIsochrones(isochrones);
         let popGrid;
-        let usedSource = 'worldpop';
+        let usedSource: import('@/types/health').PopulationSource = 'worldpop';
 
         if (bbox) {
           popGrid = await getPopulationData(bbox, 'worldpop');
