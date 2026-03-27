@@ -60,7 +60,7 @@ type Action =
   | { type: 'RESET_ANALYSIS' };
 
 const initialState: State = {
-  center: [-1.2921, 36.8219],
+  center: [23.8103, 90.4125],
   zoom: 12,
   transportProfile: 'foot-walking',
   analysisPoint: null,

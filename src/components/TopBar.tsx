@@ -142,11 +142,11 @@ export function TopBar() {
         dispatch({ type: 'SET_ANALYSIS_POINT', payload: [latNum, lonNum] });
 
         setLocationLabel(display_name || '');
-        toast.success('Location selected');
+        toast.success(`Location set: ${display_name?.split(',').slice(0, 2).join(', ') || 'Selected'}`);
         setSearchOpen(false);
         setSearchQuery(display_name || searchQuery);
       } else {
-        toast.error('No matching location found');
+        toast.error('No matching location found. Try a different search term.');
       }
     } catch {
       toast.error('Search failed');
@@ -177,7 +177,7 @@ export function TopBar() {
         await reverseGeocode(latitude, longitude);
 
         setLocating(false);
-        toast.success('Current location set');
+        toast.success('Detected your current location');
       },
       () => {
         setLocating(false);
@@ -202,7 +202,7 @@ export function TopBar() {
     dispatch({ type: 'RESET_ANALYSIS' });
     setSearchQuery('');
     setLocationLabel('');
-    toast.success('Analysis reset');
+    toast.success('Analysis cleared');
   };
 
   const contextText = useMemo(() => {
@@ -256,7 +256,7 @@ export function TopBar() {
 
           <div className="flex flex-col leading-none min-w-0">
             <span className="text-sm font-semibold text-gray-900 tracking-tight">
-              iso-Health
+              isoHealth
             </span>
             <span className="text-[10px] text-gray-500 truncate max-w-[220px] sm:max-w-[320px] md:max-w-[420px]">
               {contextText}

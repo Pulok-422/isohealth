@@ -26,9 +26,9 @@ export function FacilitiesTab() {
       <div className="flex flex-col items-center justify-center h-64 text-center space-y-4 p-6">
         <MapPin className="w-12 h-12 text-muted-foreground/30" />
         <div>
-          <h3 className="text-sm font-medium text-foreground">No Analysis Yet</h3>
+          <h3 className="text-sm font-medium text-foreground">No health facilities found</h3>
           <p className="text-xs text-muted-foreground mt-1">
-            Click on the map or search a location, then click <strong>Analyze Accessibility</strong> to begin.
+            Select a location and run an analysis to discover nearby healthcare facilities.
           </p>
         </div>
       </div>
@@ -105,7 +105,7 @@ export function FacilitiesTab() {
         ))}
         {filtered.length === 0 && allFacilities.length > 0 && (
           <div className="text-center text-xs text-muted-foreground py-8">
-            No facilities match your filter
+            No health facilities match your filter
           </div>
         )}
         {filtered.length > 50 && (

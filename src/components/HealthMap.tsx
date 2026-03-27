@@ -786,8 +786,11 @@ export function HealthMap() {
         <div className="absolute inset-0 bg-background/40 backdrop-blur-sm flex items-center justify-center z-[1000]">
           <div className="glass-panel p-6 flex flex-col items-center gap-3">
             <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-            <span className="text-sm text-muted-foreground">
-              Running accessibility analysis...
+            <span className="text-sm font-medium text-foreground">
+              Analyzing accessibility…
+            </span>
+            <span className="text-xs text-muted-foreground">
+              Finding nearby healthcare facilities
             </span>
           </div>
         </div>

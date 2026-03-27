@@ -72,10 +72,10 @@ export default function Auth() {
 
           {/* Title */}
           <CardTitle className="text-xl">isoHealth</CardTitle>
+          <p className="text-xs text-muted-foreground mt-0.5">Accessibility analysis for healthcare services</p>
 
-          {/* Description */}
           <CardDescription>
-            {isLogin ? 'Sign in to your isoHealth account' : 'Create a new isoHealth account'}
+            {isLogin ? 'Sign in to your account' : 'Create a new account'}
           </CardDescription>
         </CardHeader>
 

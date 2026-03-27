@@ -15,15 +15,7 @@ const DISTANCE_PRESETS = [1, 2, 3, 4, 5, 6];
 
 export function AnalysisSettings() {
   const { state, dispatch } = useAppState();
-  const { runAnalysis } = useAnalysis();
 
-  const handleAnalyze = () => {
-    if (state.analysisPoint) {
-      runAnalysis(state.analysisPoint[0], state.analysisPoint[1]);
-    } else {
-      runAnalysis(state.center[0], state.center[1]);
-    }
-  };
 
   return (
     <div className="space-y-4 p-3">
@@ -122,10 +114,15 @@ export function AnalysisSettings() {
         </div>
       </div>
 
-      {/* Location hint */}
-      {!state.analysisPoint && (
+      {/* Location status */}
+      {state.analysisPoint ? (
+        <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-primary/5 border border-primary/15">
+          <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+          <span className="text-[11px] font-medium text-primary">Selected location</span>
+        </div>
+      ) : (
         <p className="text-[10px] text-muted-foreground text-center">
-          Select a location on the map, search, or use My Location first.
+          Click the map or search for a place to begin.
         </p>
       )}
     </div>
@@ -157,7 +154,7 @@ export function StickyAnalyzeButton() {
         ) : (
           <Play className="w-4 h-4" />
         )}
-        {state.isAnalyzing ? 'Analyzing...' : 'Analyze Accessibility'}
+        {state.isAnalyzing ? 'Analyzing accessibility…' : 'Analyze Accessibility'}
       </Button>
     </div>
   );

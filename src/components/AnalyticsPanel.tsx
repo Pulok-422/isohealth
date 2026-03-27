@@ -21,6 +21,12 @@ export function AnalyticsPanel() {
 
   return (
     <div className="h-full flex flex-col bg-card/50 backdrop-blur-xl border-l border-border">
+      {/* Tagline */}
+      <div className="px-4 py-2 border-b border-border bg-primary/[0.03]">
+        <p className="text-[10px] text-muted-foreground leading-relaxed">
+          Accessibility analysis for healthcare services using location-based insights
+        </p>
+      </div>
       <div className="flex items-center gap-1 px-3 py-2 border-b border-border overflow-x-auto">
         {tabs.map((tab) => (
           <button
