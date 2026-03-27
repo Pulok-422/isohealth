@@ -15,15 +15,7 @@ const DISTANCE_PRESETS = [1, 2, 3, 4, 5, 6];
 
 export function AnalysisSettings() {
   const { state, dispatch } = useAppState();
-  const { runAnalysis } = useAnalysis();
 
-  const handleAnalyze = () => {
-    if (state.analysisPoint) {
-      runAnalysis(state.analysisPoint[0], state.analysisPoint[1]);
-    } else {
-      runAnalysis(state.center[0], state.center[1]);
-    }
-  };
 
   return (
     <div className="space-y-4 p-3">
