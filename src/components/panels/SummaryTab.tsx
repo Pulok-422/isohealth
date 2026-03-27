@@ -78,9 +78,9 @@ export function SummaryTab() {
       <div className="flex flex-col items-center justify-center h-64 text-center space-y-4 p-6">
         <MapPin className="w-12 h-12 text-muted-foreground/30" />
         <div>
-          <h3 className="text-sm font-medium text-foreground">No Analysis Yet</h3>
+          <h3 className="text-sm font-medium text-foreground">No analysis yet</h3>
           <p className="text-xs text-muted-foreground mt-1">
-            Click on the map or search a location, then click <strong>Analyze Accessibility</strong> to begin.
+            Select a location on the map or search for a place, then click <strong>Analyze Accessibility</strong> to discover nearby healthcare facilities and coverage.
           </p>
         </div>
       </div>

@@ -267,7 +267,7 @@ export function useAnalysis() {
         );
       } catch (error: any) {
         console.error('Analysis error:', error);
-        toast.error(`Analysis failed: ${error.message}`);
+        toast.error(error.message?.includes('fetch') ? 'Network error — please check your connection' : `Analysis failed: ${error.message}`);
       } finally {
         dispatch({ type: 'SET_ANALYZING', payload: false });
       }

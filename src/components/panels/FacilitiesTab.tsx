@@ -105,7 +105,7 @@ export function FacilitiesTab() {
         ))}
         {filtered.length === 0 && allFacilities.length > 0 && (
           <div className="text-center text-xs text-muted-foreground py-8">
-            No facilities match your filter
+            No health facilities match your filter
           </div>
         )}
         {filtered.length > 50 && (

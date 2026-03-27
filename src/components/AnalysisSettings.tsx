@@ -162,7 +162,7 @@ export function StickyAnalyzeButton() {
         ) : (
           <Play className="w-4 h-4" />
         )}
-        {state.isAnalyzing ? 'Analyzing...' : 'Analyze Accessibility'}
+        {state.isAnalyzing ? 'Analyzing accessibility…' : 'Analyze Accessibility'}
       </Button>
     </div>
   );

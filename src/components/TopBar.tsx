@@ -202,7 +202,7 @@ export function TopBar() {
     dispatch({ type: 'RESET_ANALYSIS' });
     setSearchQuery('');
     setLocationLabel('');
-    toast.success('Analysis reset');
+    toast.success('Analysis cleared');
   };
 
   const contextText = useMemo(() => {
