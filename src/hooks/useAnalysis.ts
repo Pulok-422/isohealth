@@ -8,7 +8,7 @@ import {
   haversine,
 } from '@/lib/analysis';
 import { getBBoxFromIsochrones, getPopulationEstimate } from '@/lib/population';
-import type { PopulationSource } from '@/types/health';
+import type { PopulationSource } from '@/lib/population';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
