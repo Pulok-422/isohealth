@@ -1,5 +1,5 @@
+import { supabase } from '@/integrations/supabase/client';
 import type { PopulationPoint } from '@/types/health';
-import { generatePopulationGrid } from '@/lib/analysis';
 
 export type PopulationSource = 'worldpop' | 'simulated';
 
@@ -10,11 +10,24 @@ interface BBox {
   maxLon: number;
 }
 
-const popCache = new Map<string, { data: PopulationPoint[]; ts: number }>();
+export interface PopulationEstimate {
+  total_population_estimate: number;
+  population_with_access: number;
+  population_without_access: number;
+  coverage_percent: number;
+  source: string;
+  method: string;
+  country_iso: string;
+  area_km2: number;
+  grid_points: number;
+  population_grid: PopulationPoint[];
+}
+
+const popCache = new Map<string, { data: PopulationEstimate; ts: number }>();
 const CACHE_TTL = 10 * 60 * 1000;
 
-function bboxKey(bbox: BBox, source: PopulationSource): string {
-  return `${source}-${bbox.minLat.toFixed(3)}-${bbox.maxLat.toFixed(3)}-${bbox.minLon.toFixed(3)}-${bbox.maxLon.toFixed(3)}`;
+function cacheKey(bbox: BBox, hasIsochrones: boolean): string {
+  return `pop-${bbox.minLat.toFixed(3)}-${bbox.maxLat.toFixed(3)}-${bbox.minLon.toFixed(3)}-${bbox.maxLon.toFixed(3)}-${hasIsochrones}`;
 }
 
 export function getBBoxFromIsochrones(isochrones: any): BBox | null {
@@ -45,83 +58,30 @@ export function getBBoxFromIsochrones(isochrones: any): BBox | null {
   return { minLat, maxLat, minLon, maxLon };
 }
 
-async function fetchWorldPop(bbox: BBox): Promise<PopulationPoint[]> {
-  // WorldPop doesn't have a simple public tile API for arbitrary bbox queries.
-  // We use a gridded estimation approach based on WorldPop's global 1km resolution data.
-  // For production, this would integrate with WorldPop's API or pre-processed tiles.
-  // Here we generate a realistic grid based on the bbox with population density modeling.
-
-  const points: PopulationPoint[] = [];
-  const latRange = bbox.maxLat - bbox.minLat;
-  const lonRange = bbox.maxLon - bbox.minLon;
-
-  // ~1km grid spacing (approx 0.009 degrees)
-  const spacing = 0.009;
-  const latSteps = Math.min(Math.ceil(latRange / spacing), 50);
-  const lonSteps = Math.min(Math.ceil(lonRange / spacing), 50);
-
-  const centerLat = (bbox.minLat + bbox.maxLat) / 2;
-  const centerLon = (bbox.minLon + bbox.maxLon) / 2;
-
-  for (let i = 0; i <= latSteps; i++) {
-    for (let j = 0; j <= lonSteps; j++) {
-      const lat = bbox.minLat + i * (latRange / latSteps);
-      const lon = bbox.minLon + j * (lonRange / lonSteps);
-
-      // Model urban population density - higher near center, with realistic variation
-      const distFromCenter = Math.sqrt(
-        Math.pow((lat - centerLat) / (latRange / 2 || 1), 2) +
-        Math.pow((lon - centerLon) / (lonRange / 2 || 1), 2)
-      );
-
-      // Urban core density ~5000-15000/km², suburban ~1000-3000, rural ~100-500
-      const urbanFactor = Math.max(0, 1 - distFromCenter * 0.8);
-      const baseDensity = 200 + urbanFactor * 8000;
-
-      // Add clusters for neighborhoods
-      const c1 = 3000 * Math.exp(-Math.pow(distFromCenter - 0.3, 2) / 0.05);
-      const c2 = 2000 * Math.exp(-Math.pow(distFromCenter - 0.6, 2) / 0.08);
-
-      // Seeded pseudo-random for consistency
-      const seed = Math.sin(lat * 12345.6789 + lon * 98765.4321) * 43758.5453;
-      const noise = (seed - Math.floor(seed)) * 600;
-
-      const population = Math.round(baseDensity + c1 + c2 + noise);
-
-      if (population > 50) {
-        points.push({ lat, lon, population });
-      }
-    }
-  }
-
-  return points;
-}
-
-export async function getPopulationData(
+/**
+ * Fetch real population estimates from the backend edge function.
+ * Uses WorldPop-calibrated country-level density data with spatial intersection.
+ */
+export async function getPopulationEstimate(
   bbox: BBox,
-  source: PopulationSource = 'worldpop'
-): Promise<PopulationPoint[]> {
-  const key = bboxKey(bbox, source);
+  isochrones?: any
+): Promise<PopulationEstimate> {
+  const key = cacheKey(bbox, !!isochrones?.features?.length);
   const cached = popCache.get(key);
   if (cached && Date.now() - cached.ts < CACHE_TTL) return cached.data;
 
-  let points: PopulationPoint[];
+  const { data, error } = await supabase.functions.invoke('estimate-population', {
+    body: { bbox, isochrones },
+  });
 
-  if (source === 'worldpop') {
-    try {
-      points = await fetchWorldPop(bbox);
-    } catch (err) {
-      console.warn('WorldPop fetch failed, falling back to simulated:', err);
-      const centerLat = (bbox.minLat + bbox.maxLat) / 2;
-      const centerLon = (bbox.minLon + bbox.maxLon) / 2;
-      points = generatePopulationGrid(centerLat, centerLon);
-    }
-  } else {
-    const centerLat = (bbox.minLat + bbox.maxLat) / 2;
-    const centerLon = (bbox.minLon + bbox.maxLon) / 2;
-    points = generatePopulationGrid(centerLat, centerLon);
-  }
+  if (error) throw new Error(`Population estimation failed: ${error.message}`);
 
-  popCache.set(key, { data: points, ts: Date.now() });
-  return points;
+  const result = data as PopulationEstimate;
+  popCache.set(key, { data: result, ts: Date.now() });
+  return result;
+}
+
+/** Clear the population cache (useful on reset) */
+export function clearPopulationCache() {
+  popCache.clear();
 }
