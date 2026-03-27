@@ -122,10 +122,15 @@ export function AnalysisSettings() {
         </div>
       </div>
 
-      {/* Location hint */}
-      {!state.analysisPoint && (
+      {/* Location status */}
+      {state.analysisPoint ? (
+        <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-primary/5 border border-primary/15">
+          <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+          <span className="text-[11px] font-medium text-primary">Selected location</span>
+        </div>
+      ) : (
         <p className="text-[10px] text-muted-foreground text-center">
-          Select a location on the map, search, or use My Location first.
+          Click the map or search for a place to begin.
         </p>
       )}
     </div>
