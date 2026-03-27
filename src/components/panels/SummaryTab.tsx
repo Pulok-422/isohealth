@@ -1,27 +1,49 @@
-import { Building2, MapPin, Users, AlertTriangle, Clock, Ruler, Save, Database } from 'lucide-react';
+import { Building2, MapPin, Users, AlertTriangle, Clock, Ruler, Save, Info } from 'lucide-react';
 import { useAppState } from '@/context/AppContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { formatDuration, formatDistance } from '@/lib/analysis';
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
 import { useState } from 'react';
 
-function KPICard({ icon: Icon, label, value, color = 'text-primary' }: {
+function formatPopulation(n: number): string {
+  if (n >= 1_000_000) return `~${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `~${(n / 1_000).toFixed(0)}K`;
+  return `~${n}`;
+}
+
+function KPICard({ icon: Icon, label, value, color = 'text-primary', tooltip }: {
   icon: typeof Building2;
   label: string;
   value: string | number;
   color?: string;
+  tooltip?: string;
 }) {
-  return (
+  const card = (
     <div className="data-card">
       <div className="flex items-center gap-2">
         <Icon className={`w-4 h-4 ${color}`} />
         <span className="kpi-label">{label}</span>
+        {tooltip && <Info className="w-3 h-3 text-muted-foreground/50" />}
       </div>
       <div className={`kpi-value ${color}`}>{value}</div>
     </div>
+  );
+
+  if (!tooltip) return card;
+
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>{card}</TooltipTrigger>
+        <TooltipContent className="max-w-[250px] text-xs">
+          <p>{tooltip}</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 
@@ -81,6 +103,13 @@ export function SummaryTab() {
     { name: 'Lacking Access', value: result.populationUnderserved, color: 'hsl(0, 72%, 51%)' },
   ];
 
+  const sourceLabel = result.populationSource === 'worldpop'
+    ? 'WorldPop (estimated)'
+    : 'Simulated (fallback)';
+
+  const methodTooltip = result.populationMethod
+    || 'Population estimates based on WorldPop country-level density data with spatial intersection against isochrone geometry.';
+
   return (
     <div className="space-y-4 p-3">
       {/* Save button */}
@@ -92,17 +121,38 @@ export function SummaryTab() {
       )}
 
       {/* Population Source Badge */}
-      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <Database className="w-3 h-3" />
-        Population Source: <span className="font-medium text-foreground capitalize">{result.populationSource || 'simulated'}</span>
-      </div>
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-help">
+              <Info className="w-3 h-3" />
+              Population Source: <span className="font-medium text-foreground">{sourceLabel}</span>
+            </div>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-[300px] text-xs">
+            <p>{methodTooltip}</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
 
       {/* KPIs */}
       <div className="grid grid-cols-2 gap-2">
         <KPICard icon={Building2} label="Nearby Health Facilities" value={result.facilities.length} />
         <KPICard icon={Clock} label="Closest Facility" value={result.nearestDuration ? formatDuration(result.nearestDuration) : '—'} color="text-primary" />
-        <KPICard icon={Users} label="Population with Access" value={`${coveragePercent}%`} color="text-success" />
-        <KPICard icon={AlertTriangle} label="Population Lacking Access" value={result.populationUnderserved.toLocaleString()} color="text-destructive" />
+        <KPICard
+          icon={Users}
+          label="Est. Population with Access"
+          value={`${formatPopulation(result.populationCovered)} (${coveragePercent}%)`}
+          color="text-success"
+          tooltip="Estimated population within the isochrone coverage area, based on WorldPop density data."
+        />
+        <KPICard
+          icon={AlertTriangle}
+          label="Est. Population Lacking Access"
+          value={formatPopulation(result.populationUnderserved)}
+          color="text-destructive"
+          tooltip="Estimated population in the analysis area outside isochrone coverage."
+        />
       </div>
 
       {/* Nearest facility */}
@@ -124,7 +174,7 @@ export function SummaryTab() {
 
       {/* Coverage Chart */}
       <div className="data-card">
-        <span className="kpi-label">Population Coverage</span>
+        <span className="kpi-label">Estimated Population Coverage</span>
         <div className="h-32 mt-2">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
@@ -139,11 +189,11 @@ export function SummaryTab() {
         <div className="flex justify-center gap-4 text-xs">
           <span className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-success" />
-            With Access ({result.populationCovered.toLocaleString()})
+            With Access ({formatPopulation(result.populationCovered)})
           </span>
           <span className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-destructive" />
-            Lacking Access ({result.populationUnderserved.toLocaleString()})
+            Lacking Access ({formatPopulation(result.populationUnderserved)})
           </span>
         </div>
       </div>
