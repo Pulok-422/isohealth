@@ -142,7 +142,7 @@ export function TopBar() {
         dispatch({ type: 'SET_ANALYSIS_POINT', payload: [latNum, lonNum] });
 
         setLocationLabel(display_name || '');
-        toast.success('Location selected');
+        toast.success(`Location set: ${display_name?.split(',').slice(0, 2).join(', ') || 'Selected'}`);
         setSearchOpen(false);
         setSearchQuery(display_name || searchQuery);
       } else {
