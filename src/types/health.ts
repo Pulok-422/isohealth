@@ -33,6 +33,7 @@ export interface AnalysisResult {
   analysisTypeUsed?: string;
   rangesUsed?: number[];
   populationSource?: PopulationSource;
+  populationMethod?: string;
 }
 
 export interface Scenario {

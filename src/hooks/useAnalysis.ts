@@ -7,7 +7,8 @@ import {
   suggestFacilityLocations,
   haversine,
 } from '@/lib/analysis';
-import { getBBoxFromIsochrones, getPopulationData } from '@/lib/population';
+import { getBBoxFromIsochrones, getPopulationEstimate } from '@/lib/population';
+import type { PopulationSource } from '@/lib/population';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -154,20 +155,44 @@ export function useAnalysis() {
         dispatch({ type: 'SET_FACILITIES', payload: facilities });
 
         const bbox = getBBoxFromIsochrones(isochrones);
-        let popGrid;
-        let usedSource = 'worldpop';
+        let populationCovered = 0;
+        let populationUnderserved = 0;
+        let totalPopulation = 0;
+        let popGrid: import('@/types/health').PopulationPoint[] = [];
+        let populationSource: PopulationSource = 'worldpop';
+        let populationMethod = '';
 
         if (bbox) {
-          popGrid = await getPopulationData(bbox, 'worldpop');
+          try {
+            const popEstimate = await getPopulationEstimate(bbox, isochrones);
+            populationCovered = popEstimate.population_with_access;
+            populationUnderserved = popEstimate.population_without_access;
+            totalPopulation = popEstimate.total_population_estimate;
+            popGrid = popEstimate.population_grid || [];
+            populationSource = 'worldpop';
+            populationMethod = popEstimate.method;
+            console.log('Population estimate:', popEstimate);
+          } catch (err) {
+            console.warn('Population estimation failed, using local fallback:', err);
+            const { generatePopulationGrid } = await import('@/lib/analysis');
+            popGrid = generatePopulationGrid(lat, lon);
+            const coverage = calculateCoverage(popGrid, isochrones);
+            populationCovered = coverage.covered;
+            populationUnderserved = coverage.underserved;
+            totalPopulation = coverage.total;
+            populationSource = 'simulated';
+          }
         } else {
           const { generatePopulationGrid } = await import('@/lib/analysis');
           popGrid = generatePopulationGrid(lat, lon);
-          usedSource = 'simulated';
+          const coverage = calculateCoverage(popGrid, isochrones);
+          populationCovered = coverage.covered;
+          populationUnderserved = coverage.underserved;
+          totalPopulation = coverage.total;
+          populationSource = 'simulated';
         }
 
         dispatch({ type: 'SET_POPULATION', payload: popGrid });
-
-        const coverage = calculateCoverage(popGrid, isochrones);
 
         const allFacilities = [...(facilities || []), ...state.simulatedFacilities];
         const outerGeometry = getOutermostIsochroneGeometry(isochrones);
@@ -204,13 +229,14 @@ export function useAnalysis() {
             nearestFacility,
             nearestDistance: nearestDistance ? nearestDistance * 1000 : null,
             nearestDuration: nearestDistance ? nearestDistance * 60 : null,
-            populationCovered: coverage.covered,
-            populationUnderserved: coverage.underserved,
-            totalPopulation: coverage.total,
+            populationCovered,
+            populationUnderserved,
+            totalPopulation,
             profileUsed: transportProfile,
             analysisTypeUsed: rangeType,
             rangesUsed: ranges,
-            populationSource: usedSource,
+            populationSource,
+            populationMethod,
           },
         });
 
