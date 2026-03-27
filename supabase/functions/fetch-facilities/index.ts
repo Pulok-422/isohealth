@@ -54,7 +54,7 @@ serve(async (req) => {
           lastError = `${url} returned ${response.status}`;
           response = null;
         } catch (e) {
-          lastError = `${url}: ${e.message}`;
+          lastError = `${url}: ${e instanceof Error ? e.message : 'Unknown error'}`;
           response = null;
         }
         if (attempt === 0) await new Promise(r => setTimeout(r, 2000));
