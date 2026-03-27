@@ -146,7 +146,7 @@ export function TopBar() {
         setSearchOpen(false);
         setSearchQuery(display_name || searchQuery);
       } else {
-        toast.error('No matching location found');
+        toast.error('No matching location found. Try a different search term.');
       }
     } catch {
       toast.error('Search failed');
