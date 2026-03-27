@@ -256,7 +256,7 @@ export function TopBar() {
 
           <div className="flex flex-col leading-none min-w-0">
             <span className="text-sm font-semibold text-gray-900 tracking-tight">
-              iso-Health
+              isoHealth
             </span>
             <span className="text-[10px] text-gray-500 truncate max-w-[220px] sm:max-w-[320px] md:max-w-[420px]">
               {contextText}
