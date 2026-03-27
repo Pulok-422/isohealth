@@ -261,7 +261,9 @@ export function useAnalysis() {
         });
 
         toast.success(
-          `Analysis complete: ${reachableFacilities.length} reachable facilities`
+          reachableFacilities.length > 0
+            ? `Found ${reachableFacilities.length} healthcare facilities within reach`
+            : 'No health facilities found nearby — try expanding the range'
         );
       } catch (error: any) {
         console.error('Analysis error:', error);
