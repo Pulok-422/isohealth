@@ -210,7 +210,6 @@ function getOutermostIsochroneGeometry(isochrones: any) {
   return outermost?.geometry ?? null;
 }
 
-
 function prettifyValue(value: unknown) {
   if (value == null || value === '') return 'Not available';
   return String(value)
@@ -227,31 +226,44 @@ function escapeHtml(value: unknown) {
     .replace(/'/g, '&#39;');
 }
 
+function getFirstValue(tags: Record<string, any>, keys: string[]) {
+  for (const key of keys) {
+    const value = tags[key];
+    if (value != null && value !== '' && value !== 'no') return value;
+  }
+  return null;
+}
+
 function buildAddress(tags: Record<string, any>) {
   const parts = [
-    tags['addr:housenumber'],
-    tags['addr:street'],
-    tags['addr:suburb'],
-    tags['addr:city'],
-    tags['addr:district'],
+    getFirstValue(tags, ['addr:housenumber', 'addr_house']),
+    getFirstValue(tags, ['addr:street', 'addr_stree']),
+    getFirstValue(tags, ['addr:suburb']),
+    getFirstValue(tags, ['addr:city', 'addr_city']),
+    getFirstValue(tags, ['addr:district']),
+    getFirstValue(tags, ['addr:postcode', 'addr_postc']),
   ].filter(Boolean);
 
   return parts.length ? parts.join(', ') : null;
 }
 
-function buildFacilityPopupHtml(facility: Facility, analysisPoint?: [number, number] | null, profile?: TransportProfile) {
+function buildFacilityPopupHtml(
+  facility: Facility,
+  analysisPoint?: [number, number] | null,
+  profile?: TransportProfile
+) {
   const tags = (facility.tags ?? {}) as Record<string, any>;
 
-  // Header: name + type
   const name = facility.name || tags.name || tags['name:en'] || '';
-  const typeLabel = tags.healthcare || tags.amenity || facility.type;
-  const displayName = name || (typeLabel ? typeLabel.charAt(0).toUpperCase() + typeLabel.slice(1) : 'Healthcare Facility');
+  const typeLabel = getFirstValue(tags, ['healthcare', 'amenity']) || facility.type || 'healthcare';
+  const displayName =
+    name || (typeLabel ? prettifyValue(typeLabel) : 'Healthcare Facility');
 
-  // Access info: distance + travel time
   let accessHtml = '';
   if (analysisPoint && profile) {
     const distKm = haversine(analysisPoint[0], analysisPoint[1], facility.lat, facility.lon);
     const distM = distKm * 1000;
+
     accessHtml = `
       <div style="display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid #e2e8f0;margin-bottom:6px;">
         <span style="font-size:12px;font-weight:600;color:#0f172a;">${escapeHtml(formatDistanceCompact(distM))}</span>
@@ -261,74 +273,81 @@ function buildFacilityPopupHtml(facility: Facility, analysisPoint?: [number, num
     `;
   }
 
-  // Type-specific priority fields
-  const fType = facility.type;
+  const fType = String(facility.type || typeLabel || '').toLowerCase();
+
   let priorityFields: { label: string; value: any }[] = [];
 
   if (fType === 'hospital') {
     priorityFields = [
-      { label: 'Beds', value: tags.beds },
-      { label: 'Emergency', value: tags.emergency },
-      { label: 'Speciality', value: tags['healthcare:speciality'] || tags.speciality },
-      { label: 'Operator', value: tags.operator || tags.brand },
+      { label: 'Speciality', value: getFirstValue(tags, ['healthcare:speciality', 'speciality']) },
+      { label: 'Emergency', value: getFirstValue(tags, ['emergency']) },
+      { label: 'Beds', value: getFirstValue(tags, ['beds']) },
+      { label: 'Operator', value: getFirstValue(tags, ['operator', 'operator_t', 'brand']) },
     ];
   } else if (fType === 'pharmacy') {
     priorityFields = [
-      { label: 'Dispensing', value: tags.dispensing },
-      { label: 'Opening Hours', value: tags.opening_hours },
-      { label: 'Operator', value: tags.operator || tags.brand },
+      { label: 'Dispensing', value: getFirstValue(tags, ['dispensing']) },
+      { label: 'Opening Hours', value: getFirstValue(tags, ['opening_hours', 'opening_ho']) },
+      { label: 'Operator', value: getFirstValue(tags, ['operator', 'operator_t', 'brand']) },
     ];
-  } else if (fType === 'doctors' || fType === 'clinic') {
+  } else if (fType === 'doctors' || fType === 'doctor' || fType === 'clinic') {
     priorityFields = [
-      { label: 'Speciality', value: tags['healthcare:speciality'] || tags.speciality },
-      { label: 'Phone', value: tags.phone || tags['contact:phone'] },
-      { label: 'Operator', value: tags.operator || tags.brand },
+      { label: 'Speciality', value: getFirstValue(tags, ['healthcare:speciality', 'speciality']) },
+      { label: 'Phone', value: getFirstValue(tags, ['phone', 'contact:phone', 'contact_nu']) },
+      { label: 'Operator', value: getFirstValue(tags, ['operator', 'operator_t', 'brand']) },
     ];
   } else {
     priorityFields = [
-      { label: 'Operator', value: tags.operator || tags.brand },
-      { label: 'Speciality', value: tags['healthcare:speciality'] || tags.speciality },
+      { label: 'Speciality', value: getFirstValue(tags, ['healthcare:speciality', 'speciality']) },
+      { label: 'Operator', value: getFirstValue(tags, ['operator', 'operator_t', 'brand']) },
     ];
   }
 
-  // Common fields appended
   const commonFields = [
-    { label: 'Opening Hours', value: tags.opening_hours },
-    { label: 'Wheelchair', value: tags.wheelchair },
-    { label: 'Insurance', value: tags.insurance || tags['insurance:health'] },
-    { label: 'Phone', value: tags.phone || tags['contact:phone'] },
+    { label: 'Opening Hours', value: getFirstValue(tags, ['opening_hours', 'opening_ho']) },
+    { label: 'Wheelchair', value: getFirstValue(tags, ['wheelchair']) },
+    { label: 'Insurance', value: getFirstValue(tags, ['insurance', 'insurance:health']) },
+    { label: 'Phone', value: getFirstValue(tags, ['phone', 'contact:phone', 'contact_nu']) },
   ];
 
-  // Merge, deduplicate by label, filter empty
   const seenLabels = new Set<string>();
   const allFields: { label: string; value: any }[] = [];
-  for (const f of [...priorityFields, ...commonFields]) {
-    if (!f.value || f.value === '' || f.value === 'no') continue;
-    if (seenLabels.has(f.label)) continue;
-    seenLabels.add(f.label);
-    allFields.push(f);
+
+  for (const field of [...priorityFields, ...commonFields]) {
+    if (!field.value || field.value === '' || field.value === 'no') continue;
+    if (seenLabels.has(field.label)) continue;
+    seenLabels.add(field.label);
+    allFields.push(field);
   }
+
   const shownFields = allFields.slice(0, 5);
 
-  // Website
-  const website = tags.website || tags['contact:website'] || tags.url;
+  const website = getFirstValue(tags, ['website', 'contact:website', 'url']);
   const websiteHtml = website
-    ? `<div style="margin-top:6px;"><a href="${escapeHtml(website)}" target="_blank" rel="noopener" style="font-size:11px;color:#2563eb;text-decoration:underline;">Visit website</a></div>`
+    ? `<div style="margin-top:6px;"><a href="${escapeHtml(
+        website
+      )}" target="_blank" rel="noopener" style="font-size:11px;color:#2563eb;text-decoration:underline;">Visit website</a></div>`
     : '';
 
-  // Address
-  const address = buildAddress(tags) || tags.address || tags['addr:full'];
+  const address =
+    buildAddress(tags) ||
+    getFirstValue(tags, ['address', 'addr:full']);
+
   const addressHtml = address
     ? `<div style="margin-top:6px;font-size:11px;color:#64748b;">📍 ${escapeHtml(address)}</div>`
     : '';
 
   const fieldsHtml = shownFields.length
-    ? shownFields.map(item => `
+    ? shownFields
+        .map(
+          (item) => `
         <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
           <span style="color:#64748b;font-size:12px;white-space:nowrap;">${escapeHtml(item.label)}</span>
           <span style="color:#0f172a;font-size:12px;font-weight:500;text-align:right;">${escapeHtml(prettifyValue(item.value))}</span>
         </div>
-      `).join('')
+      `
+        )
+        .join('')
     : '';
 
   return `
@@ -339,7 +358,7 @@ function buildFacilityPopupHtml(facility: Facility, analysisPoint?: [number, num
           <span style="display:inline-flex;align-items:center;padding:2px 8px;border-radius:9999px;background:${
             facility.isSimulated ? 'rgba(245, 158, 11, 0.12)' : 'rgba(37, 99, 235, 0.10)'
           };color:${facility.isSimulated ? '#b45309' : '#1d4ed8'};font-size:11px;font-weight:600;text-transform:capitalize;">
-            ${escapeHtml(typeLabel)}${facility.isSimulated ? ' • Simulated' : ''}
+            ${escapeHtml(prettifyValue(typeLabel))}${facility.isSimulated ? ' • Simulated' : ''}
           </span>
         </div>
       </div>
@@ -493,28 +512,76 @@ function OptimizationMarkers() {
 
   return (
     <>
-      {state.optimizationResults.map((opt, i) => (
-        <CircleMarker
-          key={`opt-${i}`}
-          center={[opt.lat, opt.lon]}
-          radius={12}
-          pathOptions={{
-            color: 'hsl(270, 60%, 55%)',
-            fillColor: 'hsl(270, 60%, 55%)',
-            fillOpacity: 0.2,
-            weight: 2,
-            dashArray: '4,6',
-          }}
-        >
-          <Popup>
-            <div className="text-sm space-y-1">
-              <div className="font-semibold">📍 Suggested Location #{i + 1}</div>
-              <div className="text-xs">Score: {opt.score}/100</div>
-              <div className="text-xs">{opt.reason}</div>
-            </div>
-          </Popup>
-        </CircleMarker>
-      ))}
+      {state.optimizationResults.map((opt, i) => {
+        const nearestDistanceKm =
+          state.facilities.length > 0
+            ? state.facilities.reduce((min, facility) => {
+                const distance = haversine(opt.lat, opt.lon, facility.lat, facility.lon);
+                return Math.min(min, distance);
+              }, Infinity)
+            : null;
+
+        const nearestDistanceLabel =
+          nearestDistanceKm != null && Number.isFinite(nearestDistanceKm)
+            ? formatDistanceCompact(nearestDistanceKm * 1000)
+            : null;
+
+        const impactedPopulation =
+          typeof (opt as any).population === 'number'
+            ? (opt as any).population
+            : typeof (opt as any).people === 'number'
+            ? (opt as any).people
+            : null;
+
+        return (
+          <CircleMarker
+            key={`opt-${i}`}
+            center={[opt.lat, opt.lon]}
+            radius={12}
+            pathOptions={{
+              color: 'hsl(270, 60%, 55%)',
+              fillColor: 'hsl(270, 60%, 55%)',
+              fillOpacity: 0.2,
+              weight: 2,
+              dashArray: '4,6',
+            }}
+          >
+            <Popup>
+              <div className="text-sm space-y-1">
+                <div className="font-semibold">📍 Suggested New Facility Location #{i + 1}</div>
+
+                <div className="text-xs text-muted-foreground">
+                  Score: {opt.score}/100 • Based on population density & travel time
+                </div>
+
+                <div className="text-xs">
+                  High population area with longer travel times.
+                </div>
+
+                <div className="text-xs text-muted-foreground">
+                  Suggested location to improve healthcare coverage.
+                </div>
+
+                {nearestDistanceLabel && (
+                  <div className="text-xs text-muted-foreground">
+                    Nearest existing facility: {nearestDistanceLabel} away
+                  </div>
+                )}
+
+                {impactedPopulation != null && (
+                  <div className="text-xs text-muted-foreground">
+                    Population impacted: ~{impactedPopulation.toLocaleString()}
+                  </div>
+                )}
+
+                {opt.reason && (
+                  <div className="text-xs text-muted-foreground">{opt.reason}</div>
+                )}
+              </div>
+            </Popup>
+          </CircleMarker>
+        );
+      })}
     </>
   );
 }
