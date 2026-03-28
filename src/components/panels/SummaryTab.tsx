@@ -1,13 +1,15 @@
-import { Building2, MapPin, Users, AlertTriangle, Clock, Ruler, Save, Info } from 'lucide-react';
+import { Building2, MapPin, Users, Clock, Ruler, Save, Info, Zap } from 'lucide-react';
 import { useAppState } from '@/context/AppContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { formatDuration, formatDistance } from '@/lib/analysis';
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { formatDistanceCompact, formatTravelTime } from '@/lib/travelTime';
+import { haversine } from '@/lib/analysis';
+import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
+import type { Facility, TransportProfile } from '@/types/health';
 
 function formatPopulation(n: number): string {
   if (n >= 1_000_000) return `~${(n / 1_000_000).toFixed(1)}M`;
@@ -15,10 +17,28 @@ function formatPopulation(n: number): string {
   return `~${n}`;
 }
 
-function KPICard({ icon: Icon, label, value, color = 'text-primary', tooltip }: {
+function getThresholdLabel(state: any): string {
+  const profile = state.transportProfile as TransportProfile;
+  const modeLabel: Record<TransportProfile, string> = {
+    'foot-walking': 'walking',
+    'cycling-regular': 'cycling',
+    'driving-car': 'driving',
+  };
+  const mode = modeLabel[profile] || 'walking';
+
+  if (state.analysisType === 'distance') {
+    const maxDist = Math.max(...(state.distanceThresholds || [6000]));
+    return `${(maxDist / 1000).toFixed(0)} km ${mode}`;
+  }
+  const maxTime = Math.max(...(state.timeThresholds || [3600]));
+  return `${Math.round(maxTime / 60)} min ${mode}`;
+}
+
+function KPICard({ icon: Icon, label, value, subtitle, color = 'text-primary', tooltip }: {
   icon: typeof Building2;
   label: string;
   value: string | number;
+  subtitle?: string;
   color?: string;
   tooltip?: string;
 }) {
@@ -30,6 +50,7 @@ function KPICard({ icon: Icon, label, value, color = 'text-primary', tooltip }: 
         {tooltip && <Info className="w-3 h-3 text-muted-foreground/50" />}
       </div>
       <div className={`kpi-value ${color}`}>{value}</div>
+      {subtitle && <div className="text-[10px] text-muted-foreground mt-0.5">{subtitle}</div>}
     </div>
   );
 
@@ -47,11 +68,93 @@ function KPICard({ icon: Icon, label, value, color = 'text-primary', tooltip }: 
   );
 }
 
+function NearestByType({ facilities, analysisPoint, profile }: {
+  facilities: Facility[];
+  analysisPoint: [number, number];
+  profile: TransportProfile;
+}) {
+  const nearestByType = useMemo(() => {
+    const types = ['hospital', 'pharmacy', 'clinic', 'doctors', 'healthcare'] as const;
+    const result: { type: string; facility: Facility; distMeters: number }[] = [];
+
+    for (const type of types) {
+      const ofType = facilities.filter(f => f.type === type);
+      if (!ofType.length) continue;
+
+      let nearest = ofType[0];
+      let minDist = haversine(analysisPoint[0], analysisPoint[1], nearest.lat, nearest.lon);
+
+      for (let i = 1; i < ofType.length; i++) {
+        const d = haversine(analysisPoint[0], analysisPoint[1], ofType[i].lat, ofType[i].lon);
+        if (d < minDist) { minDist = d; nearest = ofType[i]; }
+      }
+
+      result.push({ type, facility: nearest, distMeters: minDist * 1000 });
+    }
+
+    return result.sort((a, b) => a.distMeters - b.distMeters);
+  }, [facilities, analysisPoint, profile]);
+
+  if (!nearestByType.length) return null;
+
+  const typeLabels: Record<string, string> = {
+    hospital: '🏥 Closest Hospital',
+    pharmacy: '💊 Closest Pharmacy',
+    clinic: '🏨 Closest Clinic',
+    doctors: '👨‍⚕️ Closest Doctor',
+    healthcare: '⚕️ Closest Healthcare',
+  };
+
+  return (
+    <div className="data-card space-y-2">
+      <span className="kpi-label">Nearest Facilities by Type</span>
+      {nearestByType.map(({ type, facility, distMeters }) => (
+        <div key={type} className="flex items-start justify-between gap-2 py-1.5 border-b border-border/50 last:border-0">
+          <div className="min-w-0">
+            <div className="text-xs font-medium text-muted-foreground">{typeLabels[type] || type}</div>
+            <div className="text-sm font-medium truncate">{facility.name}</div>
+          </div>
+          <div className="text-right shrink-0">
+            <div className="text-xs font-medium">{formatDistanceCompact(distMeters)}</div>
+            <div className="text-[10px] text-muted-foreground">{formatTravelTime(distMeters, profile)}</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function FacilityMixInsight({ facilities }: { facilities: Facility[] }) {
+  const insight = useMemo(() => {
+    if (!facilities.length) return null;
+    const counts: Record<string, number> = {};
+    facilities.forEach(f => { counts[f.type] = (counts[f.type] || 0) + 1; });
+    const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    if (sorted.length < 2) return null;
+
+    const most = sorted[0][0];
+    const least = sorted[sorted.length - 1][0];
+    return `Most reachable facilities are ${most}s, while ${least} access is more limited.`;
+  }, [facilities]);
+
+  if (!insight) return null;
+
+  return (
+    <div className="flex items-start gap-2 p-2.5 rounded-lg bg-secondary/50 text-xs text-muted-foreground">
+      <Zap className="w-3.5 h-3.5 mt-0.5 shrink-0 text-primary" />
+      <span>{insight}</span>
+    </div>
+  );
+}
+
 export function SummaryTab() {
   const { state } = useAppState();
   const { user } = useAuth();
   const result = state.analysisResult;
   const [saving, setSaving] = useState(false);
+
+  const profile = (result?.profileUsed || state.transportProfile) as TransportProfile;
+  const thresholdLabel = getThresholdLabel(state);
 
   const handleSave = async () => {
     if (!user || !result) return;
@@ -65,7 +168,6 @@ export function SummaryTab() {
       results_json: {
         facilityCount: result.facilities.length,
         populationCovered: result.populationCovered,
-        populationUnderserved: result.populationUnderserved,
       },
     });
     setSaving(false);
@@ -87,21 +189,12 @@ export function SummaryTab() {
     );
   }
 
-  const coveragePercent = result.totalPopulation > 0
-    ? Math.round((result.populationCovered / result.totalPopulation) * 100)
-    : 0;
-
   const facilityTypes = result.facilities.reduce((acc, f) => {
     acc[f.type] = (acc[f.type] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
 
   const chartData = Object.entries(facilityTypes).map(([name, count]) => ({ name, count }));
-
-  const pieData = [
-    { name: 'With Access', value: result.populationCovered, color: 'hsl(152, 60%, 38%)' },
-    { name: 'Lacking Access', value: result.populationUnderserved, color: 'hsl(0, 72%, 51%)' },
-  ];
 
   const sourceLabel = result.populationSource === 'worldpop'
     ? 'WorldPop (estimated)'
@@ -110,8 +203,13 @@ export function SummaryTab() {
   const methodTooltip = result.populationMethod
     || 'Population estimates based on WorldPop country-level density data with spatial intersection against isochrone geometry.';
 
+  // Key insight line
+  const keyInsight = result.facilities.length > 0
+    ? `${result.facilities.length} health facilities are reachable within ${thresholdLabel}, covering an estimated ${formatPopulation(result.populationCovered)} people.`
+    : `No health facilities found within ${thresholdLabel}.`;
+
   return (
-    <div className="space-y-4 p-3">
+    <div className="space-y-3 p-3">
       {/* Save button */}
       {user && (
         <Button size="sm" variant="outline" onClick={handleSave} disabled={saving} className="w-full gap-1.5">
@@ -119,6 +217,17 @@ export function SummaryTab() {
           {saving ? 'Saving...' : 'Save Analysis'}
         </Button>
       )}
+
+      {/* Key Insight */}
+      <div className="p-3 rounded-lg bg-primary/5 border border-primary/10">
+        <p className="text-xs font-medium text-foreground leading-relaxed">{keyInsight}</p>
+      </div>
+
+      {/* Coverage Threshold Badge */}
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <Clock className="w-3 h-3" />
+        Coverage threshold: <span className="font-semibold text-foreground">{thresholdLabel}</span>
+      </div>
 
       {/* Population Source Badge */}
       <TooltipProvider>
@@ -137,68 +246,34 @@ export function SummaryTab() {
 
       {/* KPIs */}
       <div className="grid grid-cols-2 gap-2">
-        <KPICard icon={Building2} label="Nearby Health Facilities" value={result.facilities.length} />
-        <KPICard icon={Clock} label="Closest Facility" value={result.nearestDuration ? formatDuration(result.nearestDuration) : '—'} color="text-primary" />
+        <KPICard
+          icon={Building2}
+          label="Nearby Health Facilities"
+          value={result.facilities.length}
+          subtitle={`within ${thresholdLabel}`}
+        />
         <KPICard
           icon={Users}
-          label="Est. Population with Access"
-          value={`${formatPopulation(result.populationCovered)} (${coveragePercent}%)`}
+          label="Est. Population in Service Area"
+          value={formatPopulation(result.populationCovered)}
           color="text-success"
           tooltip="Estimated population within the isochrone coverage area, based on WorldPop density data."
         />
-        <KPICard
-          icon={AlertTriangle}
-          label="Est. Population Lacking Access"
-          value={formatPopulation(result.populationUnderserved)}
-          color="text-destructive"
-          tooltip="Estimated population in the analysis area outside isochrone coverage."
-        />
       </div>
 
-      {/* Nearest facility */}
-      {result.nearestFacility && (
-        <div className="data-card">
-          <span className="kpi-label">Closest Health Facility</span>
-          <div className="flex items-center gap-2 mt-1">
-            <span className="text-sm font-medium">{result.nearestFacility.name}</span>
-          </div>
-          <div className="flex gap-3 mt-1 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <Ruler className="w-3 h-3" />
-              {result.nearestDistance ? formatDistance(result.nearestDistance) : '—'}
-            </span>
-            <span className="capitalize">{result.nearestFacility.type}</span>
-          </div>
-        </div>
+      {/* Facility Mix Insight */}
+      <FacilityMixInsight facilities={result.facilities} />
+
+      {/* Nearest Facilities by Type */}
+      {state.analysisPoint && (
+        <NearestByType
+          facilities={result.facilities}
+          analysisPoint={state.analysisPoint}
+          profile={profile}
+        />
       )}
 
-      {/* Coverage Chart */}
-      <div className="data-card">
-        <span className="kpi-label">Estimated Population Coverage</span>
-        <div className="h-32 mt-2">
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie data={pieData} cx="50%" cy="50%" innerRadius={30} outerRadius={50} dataKey="value" stroke="none">
-                {pieData.map((entry, idx) => (
-                  <Cell key={idx} fill={entry.color} />
-                ))}
-              </Pie>
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-        <div className="flex justify-center gap-4 text-xs">
-          <span className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-success" />
-            With Access ({formatPopulation(result.populationCovered)})
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-destructive" />
-            Lacking Access ({formatPopulation(result.populationUnderserved)})
-          </span>
-        </div>
-      </div>
-
-      {/* Facility Types */}
+      {/* Facility Types Chart */}
       {chartData.length > 0 && (
         <div className="data-card">
           <span className="kpi-label">Facility Types</span>
