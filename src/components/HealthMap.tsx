@@ -441,6 +441,7 @@ function MapClickHandler() {
 
 function ClusteredFacilityMarkers({ facilities }: { facilities: Facility[] }) {
   const map = useMap();
+  const { state } = useAppState();
   const clusterRef = useRef<L.MarkerClusterGroup | null>(null);
 
   useEffect(() => {
@@ -467,12 +468,15 @@ function ClusteredFacilityMarkers({ facilities }: { facilities: Facility[] }) {
       },
     });
 
+    const profile = (state.analysisResult?.profileUsed || state.transportProfile) as TransportProfile;
+    const point = state.analysisPoint;
+
     facilities.forEach((f) => {
       const marker = L.marker([f.lat, f.lon], {
         icon: createFacilityIcon(f.type, f.isSimulated),
       });
 
-      marker.bindPopup(buildFacilityPopupHtml(f));
+      marker.bindPopup(buildFacilityPopupHtml(f, point, profile));
       cluster.addLayer(marker);
     });
 
@@ -485,7 +489,7 @@ function ClusteredFacilityMarkers({ facilities }: { facilities: Facility[] }) {
         clusterRef.current = null;
       }
     };
-  }, [facilities, map]);
+  }, [facilities, map, state.analysisPoint, state.transportProfile, state.analysisResult?.profileUsed]);
 
   return null;
 }
