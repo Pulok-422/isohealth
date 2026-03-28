@@ -17,7 +17,9 @@ import 'leaflet.markercluster';
 import { useAppState } from '@/context/AppContext';
 import { Layers } from 'lucide-react';
 import { MapLegend } from '@/components/MapLegend';
-import type { Facility } from '@/types/health';
+import type { Facility, TransportProfile } from '@/types/health';
+import { haversine } from '@/lib/analysis';
+import { formatDistanceCompact, formatTravelTime } from '@/lib/travelTime';
 
 const ISOCHRONE_COLORS = [
   'rgba(255, 245, 157, 0.60)',
