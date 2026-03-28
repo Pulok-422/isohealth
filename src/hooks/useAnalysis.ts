@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { useAppState } from '@/context/AppContext';
+import { estimateTravelTime } from '@/lib/travelTime';
 import { fetchFacilities, generateIsochrones } from '@/lib/api';
 import {
   calculateCoverage,
