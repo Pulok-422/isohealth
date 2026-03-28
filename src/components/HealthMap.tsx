@@ -17,7 +17,9 @@ import 'leaflet.markercluster';
 import { useAppState } from '@/context/AppContext';
 import { Layers } from 'lucide-react';
 import { MapLegend } from '@/components/MapLegend';
-import type { Facility } from '@/types/health';
+import type { Facility, TransportProfile } from '@/types/health';
+import { haversine } from '@/lib/analysis';
+import { formatDistanceCompact, formatTravelTime } from '@/lib/travelTime';
 
 const ISOCHRONE_COLORS = [
   'rgba(255, 245, 157, 0.60)',
@@ -208,12 +210,6 @@ function getOutermostIsochroneGeometry(isochrones: any) {
   return outermost?.geometry ?? null;
 }
 
-function prettifyLabel(key: string) {
-  return key
-    .replace(/_/g, ' ')
-    .replace(/:/g, ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase());
-}
 
 function prettifyValue(value: unknown) {
   if (value == null || value === '') return 'Not available';
@@ -243,123 +239,119 @@ function buildAddress(tags: Record<string, any>) {
   return parts.length ? parts.join(', ') : null;
 }
 
-function buildFacilityPopupHtml(facility: Facility) {
+function buildFacilityPopupHtml(facility: Facility, analysisPoint?: [number, number] | null, profile?: TransportProfile) {
   const tags = (facility.tags ?? {}) as Record<string, any>;
 
-  const detailCandidates = [
-    { label: 'Operator', value: tags.operator || tags.brand || tags.network },
-    {
-      label: 'Service',
-      value: tags.healthcare || tags.amenity || tags['healthcare:speciality'] || facility.type,
-    },
-    { label: 'Specialty', value: tags['healthcare:speciality'] || tags.speciality },
-    { label: 'Emergency', value: tags.emergency },
-    { label: 'Opening Hours', value: tags.opening_hours },
-    { label: 'Phone', value: tags.phone || tags['contact:phone'] },
-    { label: 'Website', value: tags.website || tags['contact:website'] },
-    { label: 'Wheelchair Access', value: tags.wheelchair },
-    { label: 'Address', value: buildAddress(tags) || tags.address || tags['addr:full'] },
-  ].filter((item) => item.value != null && item.value !== '');
+  // Header: name + type
+  const name = facility.name || tags.name || tags['name:en'] || '';
+  const typeLabel = tags.healthcare || tags.amenity || facility.type;
+  const displayName = name || (typeLabel ? typeLabel.charAt(0).toUpperCase() + typeLabel.slice(1) : 'Healthcare Facility');
 
-  const shownDetails = detailCandidates.slice(0, 5);
-
-  const extraTagEntries = Object.entries(tags)
-    .filter(([key, value]) => {
-      if (value == null || value === '') return false;
-
-      const excludedKeys = new Set([
-        'operator',
-        'brand',
-        'network',
-        'healthcare',
-        'amenity',
-        'healthcare:speciality',
-        'speciality',
-        'emergency',
-        'opening_hours',
-        'phone',
-        'contact:phone',
-        'website',
-        'contact:website',
-        'wheelchair',
-        'address',
-        'addr:full',
-        'addr:housenumber',
-        'addr:street',
-        'addr:suburb',
-        'addr:city',
-        'addr:district',
-        'name',
-      ]);
-
-      return !excludedKeys.has(key);
-    })
-    .slice(0, 2);
-
-  const detailHtml = shownDetails.length
-    ? shownDetails
-        .map(
-          (item) => `
-            <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
-              <span style="color:#64748b;font-size:12px;white-space:nowrap;">${escapeHtml(
-                item.label
-              )}</span>
-              <span style="color:#0f172a;font-size:12px;font-weight:500;text-align:right;">${escapeHtml(
-                prettifyValue(item.value)
-              )}</span>
-            </div>
-          `
-        )
-        .join('')
-    : `
-      <div style="color:#64748b;font-size:12px;">
-        Basic facility information is available.
+  // Access info: distance + travel time
+  let accessHtml = '';
+  if (analysisPoint && profile) {
+    const distKm = haversine(analysisPoint[0], analysisPoint[1], facility.lat, facility.lon);
+    const distM = distKm * 1000;
+    accessHtml = `
+      <div style="display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid #e2e8f0;margin-bottom:6px;">
+        <span style="font-size:12px;font-weight:600;color:#0f172a;">${escapeHtml(formatDistanceCompact(distM))}</span>
+        <span style="color:#94a3b8;">•</span>
+        <span style="font-size:12px;color:#475569;">${escapeHtml(formatTravelTime(distM, profile))}</span>
       </div>
     `;
+  }
 
-  const extraHtml = extraTagEntries.length
-    ? `
-      <div style="margin-top:8px;padding-top:8px;border-top:1px solid #e2e8f0;">
-        ${extraTagEntries
-          .map(
-            ([key, value]) => `
-              <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
-                <span style="color:#64748b;font-size:12px;white-space:nowrap;">${escapeHtml(
-                  prettifyLabel(key)
-                )}</span>
-                <span style="color:#0f172a;font-size:12px;font-weight:500;text-align:right;">${escapeHtml(
-                  prettifyValue(value)
-                )}</span>
-              </div>
-            `
-          )
-          .join('')}
-      </div>
-    `
+  // Type-specific priority fields
+  const fType = facility.type;
+  let priorityFields: { label: string; value: any }[] = [];
+
+  if (fType === 'hospital') {
+    priorityFields = [
+      { label: 'Beds', value: tags.beds },
+      { label: 'Emergency', value: tags.emergency },
+      { label: 'Speciality', value: tags['healthcare:speciality'] || tags.speciality },
+      { label: 'Operator', value: tags.operator || tags.brand },
+    ];
+  } else if (fType === 'pharmacy') {
+    priorityFields = [
+      { label: 'Dispensing', value: tags.dispensing },
+      { label: 'Opening Hours', value: tags.opening_hours },
+      { label: 'Operator', value: tags.operator || tags.brand },
+    ];
+  } else if (fType === 'doctors' || fType === 'clinic') {
+    priorityFields = [
+      { label: 'Speciality', value: tags['healthcare:speciality'] || tags.speciality },
+      { label: 'Phone', value: tags.phone || tags['contact:phone'] },
+      { label: 'Operator', value: tags.operator || tags.brand },
+    ];
+  } else {
+    priorityFields = [
+      { label: 'Operator', value: tags.operator || tags.brand },
+      { label: 'Speciality', value: tags['healthcare:speciality'] || tags.speciality },
+    ];
+  }
+
+  // Common fields appended
+  const commonFields = [
+    { label: 'Opening Hours', value: tags.opening_hours },
+    { label: 'Wheelchair', value: tags.wheelchair },
+    { label: 'Insurance', value: tags.insurance || tags['insurance:health'] },
+    { label: 'Phone', value: tags.phone || tags['contact:phone'] },
+  ];
+
+  // Merge, deduplicate by label, filter empty
+  const seenLabels = new Set<string>();
+  const allFields: { label: string; value: any }[] = [];
+  for (const f of [...priorityFields, ...commonFields]) {
+    if (!f.value || f.value === '' || f.value === 'no') continue;
+    if (seenLabels.has(f.label)) continue;
+    seenLabels.add(f.label);
+    allFields.push(f);
+  }
+  const shownFields = allFields.slice(0, 5);
+
+  // Website
+  const website = tags.website || tags['contact:website'] || tags.url;
+  const websiteHtml = website
+    ? `<div style="margin-top:6px;"><a href="${escapeHtml(website)}" target="_blank" rel="noopener" style="font-size:11px;color:#2563eb;text-decoration:underline;">Visit website</a></div>`
+    : '';
+
+  // Address
+  const address = buildAddress(tags) || tags.address || tags['addr:full'];
+  const addressHtml = address
+    ? `<div style="margin-top:6px;font-size:11px;color:#64748b;">📍 ${escapeHtml(address)}</div>`
+    : '';
+
+  const fieldsHtml = shownFields.length
+    ? shownFields.map(item => `
+        <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;">
+          <span style="color:#64748b;font-size:12px;white-space:nowrap;">${escapeHtml(item.label)}</span>
+          <span style="color:#0f172a;font-size:12px;font-weight:500;text-align:right;">${escapeHtml(prettifyValue(item.value))}</span>
+        </div>
+      `).join('')
     : '';
 
   return `
-    <div style="min-width:220px;max-width:260px;font-size:13px;line-height:1.45;">
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px;">
-        <div>
-          <div style="font-weight:700;font-size:14px;color:#0f172a;">${escapeHtml(
-            facility.name || 'Unnamed Facility'
-          )}</div>
-          <div style="margin-top:4px;">
-            <span style="display:inline-flex;align-items:center;padding:2px 8px;border-radius:9999px;background:${
-              facility.isSimulated ? 'rgba(245, 158, 11, 0.12)' : 'rgba(37, 99, 235, 0.10)'
-            };color:${facility.isSimulated ? '#b45309' : '#1d4ed8'};font-size:11px;font-weight:600;text-transform:capitalize;">
-              ${escapeHtml(facility.type)}${facility.isSimulated ? ' • Simulated' : ''}
-            </span>
-          </div>
+    <div style="min-width:220px;max-width:280px;font-size:13px;line-height:1.45;">
+      <div style="margin-bottom:6px;">
+        <div style="font-weight:700;font-size:14px;color:#0f172a;">${escapeHtml(displayName)}</div>
+        <div style="margin-top:3px;">
+          <span style="display:inline-flex;align-items:center;padding:2px 8px;border-radius:9999px;background:${
+            facility.isSimulated ? 'rgba(245, 158, 11, 0.12)' : 'rgba(37, 99, 235, 0.10)'
+          };color:${facility.isSimulated ? '#b45309' : '#1d4ed8'};font-size:11px;font-weight:600;text-transform:capitalize;">
+            ${escapeHtml(typeLabel)}${facility.isSimulated ? ' • Simulated' : ''}
+          </span>
         </div>
       </div>
 
-      <div style="display:flex;flex-direction:column;gap:6px;">
-        ${detailHtml}
+      ${accessHtml}
+
+      <div style="display:flex;flex-direction:column;gap:5px;">
+        ${fieldsHtml}
       </div>
 
-      ${extraHtml}
+      ${websiteHtml}
+      ${addressHtml}
     </div>
   `;
 }
@@ -443,6 +435,7 @@ function MapClickHandler() {
 
 function ClusteredFacilityMarkers({ facilities }: { facilities: Facility[] }) {
   const map = useMap();
+  const { state } = useAppState();
   const clusterRef = useRef<L.MarkerClusterGroup | null>(null);
 
   useEffect(() => {
@@ -469,12 +462,15 @@ function ClusteredFacilityMarkers({ facilities }: { facilities: Facility[] }) {
       },
     });
 
+    const profile = (state.analysisResult?.profileUsed || state.transportProfile) as TransportProfile;
+    const point = state.analysisPoint;
+
     facilities.forEach((f) => {
       const marker = L.marker([f.lat, f.lon], {
         icon: createFacilityIcon(f.type, f.isSimulated),
       });
 
-      marker.bindPopup(buildFacilityPopupHtml(f));
+      marker.bindPopup(buildFacilityPopupHtml(f, point, profile));
       cluster.addLayer(marker);
     });
 
@@ -487,7 +483,7 @@ function ClusteredFacilityMarkers({ facilities }: { facilities: Facility[] }) {
         clusterRef.current = null;
       }
     };
-  }, [facilities, map]);
+  }, [facilities, map, state.analysisPoint, state.transportProfile, state.analysisResult?.profileUsed]);
 
   return null;
 }

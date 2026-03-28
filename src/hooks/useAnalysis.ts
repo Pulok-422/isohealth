@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { useAppState } from '@/context/AppContext';
+import { estimateTravelTime } from '@/lib/travelTime';
 import { fetchFacilities, generateIsochrones } from '@/lib/api';
 import {
   calculateCoverage,
@@ -228,7 +229,7 @@ export function useAnalysis() {
             isochrones,
             nearestFacility,
             nearestDistance: nearestDistance ? nearestDistance * 1000 : null,
-            nearestDuration: nearestDistance ? nearestDistance * 60 : null,
+            nearestDuration: nearestDistance ? estimateTravelTime(nearestDistance * 1000, transportProfile) : null,
             populationCovered,
             populationUnderserved,
             totalPopulation,
