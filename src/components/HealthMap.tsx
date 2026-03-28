@@ -210,12 +210,6 @@ function getOutermostIsochroneGeometry(isochrones: any) {
   return outermost?.geometry ?? null;
 }
 
-function prettifyLabel(key: string) {
-  return key
-    .replace(/_/g, ' ')
-    .replace(/:/g, ' ')
-    .replace(/\b\w/g, (c) => c.toUpperCase());
-}
 
 function prettifyValue(value: unknown) {
   if (value == null || value === '') return 'Not available';
