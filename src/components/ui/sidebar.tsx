@@ -12,6 +12,8 @@ import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
+// Removed the block related to "Accessibility analysis for healthcare services"
+
 const SIDEBAR_COOKIE_NAME = "sidebar:state";
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
 const SIDEBAR_WIDTH = "16rem";
@@ -231,10 +233,6 @@ const SidebarTrigger = React.forwardRef<React.ElementRef<typeof Button>, React.C
   },
 );
 SidebarTrigger.displayName = "SidebarTrigger";
-
-// Removed unnecessary card block
-
-// Continue the rest of the Sidebar code and its components
 
 export {
   Sidebar,
