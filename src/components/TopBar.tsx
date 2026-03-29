@@ -81,6 +81,7 @@ export function TopBar() {
   const [searchQuery, setSearchQuery] = useState('');
   const [locating, setLocating] = useState(false);
   const [locationLabel, setLocationLabel] = useState('');
+  const [suggestions, setSuggestions] = useState<any[]>([]); // Track suggestions
   const searchWrapRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -114,12 +115,32 @@ export function TopBar() {
       if (readable) {
         setLocationLabel(readable);
       } else {
-        setLocationLabel('');
+        setLocationLabel(''); 
       }
     } catch {
       setLocationLabel('');
     }
   }, []);
+
+  // Fetch suggestions as the user types
+  const handleSearchInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const query = e.target.value;
+    setSearchQuery(query);
+    
+    if (query.trim().length > 2) {  // Fetch suggestions when input length > 2
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5`
+        );
+        const data = await res.json();
+        setSuggestions(data); // Update the suggestions state
+      } catch {
+        setSuggestions([]); // Reset if there's an error
+      }
+    } else {
+      setSuggestions([]); // Clear suggestions if query is too short
+    }
+  };
 
   const handleSearch = useCallback(async () => {
     if (!searchQuery.trim()) return;
@@ -186,17 +207,6 @@ export function TopBar() {
       { enableHighAccuracy: true, timeout: 10000 }
     );
   };
-
-  useEffect(() => {
-    if (!state.analysisPoint) {
-      setLocationLabel('');
-      return;
-    }
-
-    if (searchQuery && locationLabel && locationLabel === searchQuery) return;
-
-    reverseGeocode(state.analysisPoint[0], state.analysisPoint[1]);
-  }, [state.analysisPoint, reverseGeocode]); // intentional: keep independent from searchQuery/locationLabel changes
 
   const handleReset = () => {
     dispatch({ type: 'RESET_ANALYSIS' });
@@ -285,7 +295,7 @@ export function TopBar() {
                     type="text"
                     placeholder="Search location..."
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onChange={handleSearchInputChange}
                     onKeyDown={handleKeyDown}
                     className="w-full h-10 pl-9 pr-16 rounded-lg border border-gray-200 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1773cf]/20 focus:border-[#1773cf]"
                   />
@@ -296,6 +306,23 @@ export function TopBar() {
                   >
                     Go
                   </button>
+                  {/* Suggestions Dropdown */}
+                  {suggestions.length > 0 && (
+                    <div className="absolute left-0 top-full mt-2 w-full bg-white border border-gray-200 shadow-lg rounded-lg z-50">
+                      {suggestions.map((suggestion: any) => (
+                        <button
+                          key={suggestion.place_id}
+                          className="w-full text-left p-2 text-sm text-slate-700 hover:bg-gray-100"
+                          onClick={() => {
+                            setSearchQuery(suggestion.display_name);
+                            handleSearch();
+                          }}
+                        >
+                          {suggestion.display_name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
