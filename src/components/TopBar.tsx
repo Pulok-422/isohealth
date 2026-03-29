@@ -115,7 +115,7 @@ export function TopBar() {
       if (readable) {
         setLocationLabel(readable);
       } else {
-        setLocationLabel(''); 
+        setLocationLabel('');
       }
     } catch {
       setLocationLabel('');
