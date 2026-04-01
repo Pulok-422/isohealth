@@ -24,6 +24,7 @@ export type Database = {
           ranges: Json | null
           request_type: string | null
           user_id: string | null
+          visitor_id: string | null
         }
         Insert: {
           created_at?: string
@@ -34,6 +35,7 @@ export type Database = {
           ranges?: Json | null
           request_type?: string | null
           user_id?: string | null
+          visitor_id?: string | null
         }
         Update: {
           created_at?: string
@@ -44,6 +46,7 @@ export type Database = {
           ranges?: Json | null
           request_type?: string | null
           user_id?: string | null
+          visitor_id?: string | null
         }
         Relationships: []
       }
@@ -191,6 +194,36 @@ export type Database = {
           scenario_data_json?: Json | null
           scenario_name?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      site_visits: {
+        Row: {
+          created_at: string
+          id: string
+          page_path: string
+          referrer: string | null
+          user_agent: string | null
+          user_id: string | null
+          visitor_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          page_path?: string
+          referrer?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+          visitor_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          page_path?: string
+          referrer?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+          visitor_id?: string
         }
         Relationships: []
       }
