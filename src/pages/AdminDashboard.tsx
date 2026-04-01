@@ -3,21 +3,22 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowLeft, Users, MapPin, BarChart3, Activity, Globe } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, LineChart, Line, Tooltip } from 'recharts';
+import { ArrowLeft, Users, MapPin, BarChart3, Activity, Globe, Eye, UserCheck } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, LineChart, Line, Tooltip, AreaChart, Area } from 'recharts';
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const [stats, setStats] = useState({
+    totalVisits: 0,
+    uniqueVisitors: 0,
+    totalMaps: 0,
+    uniqueMapUsers: 0,
     totalUsers: 0,
-    totalIsochrones: 0,
-    totalRoutes: 0,
-    totalMatrix: 0,
     totalSaved: 0,
   });
   const [topPlaces, setTopPlaces] = useState<{ place_name: string; count: number }[]>([]);
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
-  const [dailyUsage, setDailyUsage] = useState<{ date: string; count: number }[]>([]);
+  const [dailyVisits, setDailyVisits] = useState<{ date: string; visits: number; maps: number }[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -27,21 +28,41 @@ export default function AdminDashboard() {
   async function loadAdminData() {
     setLoading(true);
 
-    const [profiles, isochrones, routes, matrix, saved, searches, recentSearches] = await Promise.all([
+    const [
+      visits,
+      profiles,
+      isochrones,
+      saved,
+      searches,
+      recentSearches,
+      visitRows,
+      isoRows,
+    ] = await Promise.all([
+      supabase.from('site_visits').select('id', { count: 'exact', head: true }),
       supabase.from('profiles').select('id', { count: 'exact', head: true }),
       supabase.from('isochrone_requests').select('id', { count: 'exact', head: true }),
-      supabase.from('route_requests').select('id', { count: 'exact', head: true }),
-      supabase.from('matrix_requests').select('id', { count: 'exact', head: true }),
       supabase.from('saved_analyses').select('id', { count: 'exact', head: true }),
       supabase.from('user_search_history').select('place_name').limit(500),
       supabase.from('user_search_history').select('*').order('created_at', { ascending: false }).limit(20),
+      supabase.from('site_visits').select('visitor_id, created_at').order('created_at', { ascending: true }).limit(1000),
+      supabase.from('isochrone_requests').select('user_id, visitor_id, created_at').order('created_at', { ascending: true }).limit(1000),
     ]);
 
+    // Unique visitors
+    const uniqueVisitorSet = new Set((visitRows.data || []).map((v: any) => v.visitor_id));
+    // Unique map generators
+    const uniqueMapSet = new Set(
+      (isoRows.data || [])
+        .map((r: any) => r.user_id || r.visitor_id)
+        .filter(Boolean)
+    );
+
     setStats({
+      totalVisits: visits.count || 0,
+      uniqueVisitors: uniqueVisitorSet.size,
+      totalMaps: isochrones.count || 0,
+      uniqueMapUsers: uniqueMapSet.size,
       totalUsers: profiles.count || 0,
-      totalIsochrones: isochrones.count || 0,
-      totalRoutes: routes.count || 0,
-      totalMatrix: matrix.count || 0,
       totalSaved: saved.count || 0,
     });
 
@@ -58,25 +79,34 @@ export default function AdminDashboard() {
 
     setRecentActivity(recentSearches.data || []);
 
-    // Daily usage from isochrone_requests
-    const { data: isoData } = await supabase.from('isochrone_requests').select('created_at').order('created_at', { ascending: true }).limit(500);
-    if (isoData) {
-      const daily: Record<string, number> = {};
-      isoData.forEach((r: any) => {
-        const date = new Date(r.created_at).toISOString().split('T')[0];
-        daily[date] = (daily[date] || 0) + 1;
-      });
-      setDailyUsage(Object.entries(daily).map(([date, count]) => ({ date, count })));
-    }
+    // Daily trends combining visits + maps
+    const dailyMap: Record<string, { visits: number; maps: number }> = {};
+    (visitRows.data || []).forEach((r: any) => {
+      const date = new Date(r.created_at).toISOString().split('T')[0];
+      if (!dailyMap[date]) dailyMap[date] = { visits: 0, maps: 0 };
+      dailyMap[date].visits++;
+    });
+    (isoRows.data || []).forEach((r: any) => {
+      const date = new Date(r.created_at).toISOString().split('T')[0];
+      if (!dailyMap[date]) dailyMap[date] = { visits: 0, maps: 0 };
+      dailyMap[date].maps++;
+    });
+    setDailyVisits(
+      Object.entries(dailyMap)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([date, d]) => ({ date, ...d }))
+    );
 
     setLoading(false);
   }
 
   const kpis = [
-    { label: 'Total Users', value: stats.totalUsers, icon: Users, color: 'text-primary' },
-    { label: 'Isochrones Generated', value: stats.totalIsochrones, icon: Globe, color: 'text-chart-green' },
-    { label: 'Route Requests', value: stats.totalRoutes, icon: MapPin, color: 'text-chart-amber' },
-    { label: 'Analyses Saved', value: stats.totalSaved, icon: BarChart3, color: 'text-chart-purple' },
+    { label: 'Total Visits', value: stats.totalVisits, icon: Eye, color: 'text-primary' },
+    { label: 'Unique Visitors', value: stats.uniqueVisitors, icon: UserCheck, color: 'text-chart-green' },
+    { label: 'Maps Generated', value: stats.totalMaps, icon: Globe, color: 'text-chart-amber' },
+    { label: 'Unique Map Users', value: stats.uniqueMapUsers, icon: Users, color: 'text-chart-purple' },
+    { label: 'Registered Users', value: stats.totalUsers, icon: Users, color: 'text-primary' },
+    { label: 'Saved Analyses', value: stats.totalSaved, icon: BarChart3, color: 'text-chart-green' },
   ];
 
   return (
@@ -90,11 +120,20 @@ export default function AdminDashboard() {
 
       <div className="max-w-6xl mx-auto p-6 space-y-6">
         {loading ? (
-          <p className="text-muted-foreground">Loading analytics...</p>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Card key={i}>
+                <CardContent className="pt-6">
+                  <div className="h-4 w-24 bg-muted animate-pulse rounded mb-2" />
+                  <div className="h-8 w-16 bg-muted animate-pulse rounded" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         ) : (
           <>
             {/* KPIs */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               {kpis.map(({ label, value, icon: Icon, color }) => (
                 <Card key={label}>
                   <CardContent className="pt-6">
@@ -112,17 +151,18 @@ export default function AdminDashboard() {
             <div className="grid md:grid-cols-2 gap-6">
               {/* Usage over time */}
               <Card>
-                <CardHeader><CardTitle className="text-base flex items-center gap-2"><Activity className="w-4 h-4" /> Usage Over Time</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="text-base flex items-center gap-2"><Activity className="w-4 h-4" /> Daily Trends</CardTitle></CardHeader>
                 <CardContent>
-                  {dailyUsage.length > 0 ? (
+                  {dailyVisits.length > 0 ? (
                     <div className="h-48">
                       <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={dailyUsage}>
+                        <AreaChart data={dailyVisits}>
                           <XAxis dataKey="date" tick={{ fontSize: 10 }} />
                           <YAxis tick={{ fontSize: 10 }} />
                           <Tooltip />
-                          <Line type="monotone" dataKey="count" stroke="hsl(210, 80%, 45%)" strokeWidth={2} dot={false} />
-                        </LineChart>
+                          <Area type="monotone" dataKey="visits" stroke="hsl(210, 80%, 45%)" fill="hsl(210, 80%, 45%)" fillOpacity={0.15} strokeWidth={2} name="Visits" />
+                          <Area type="monotone" dataKey="maps" stroke="hsl(38, 90%, 55%)" fill="hsl(38, 90%, 55%)" fillOpacity={0.15} strokeWidth={2} name="Maps Generated" />
+                        </AreaChart>
                       </ResponsiveContainer>
                     </div>
                   ) : (

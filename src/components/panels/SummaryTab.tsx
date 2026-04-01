@@ -1,4 +1,4 @@
-import { Building2, MapPin, Users, Clock, Ruler, Save, Info, Zap } from 'lucide-react';
+import { Building2, MapPin, Users, Clock, Ruler, Save, Info, Zap, Shield, AlertTriangle, CheckCircle } from 'lucide-react';
 import { useAppState } from '@/context/AppContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -32,6 +32,27 @@ function getThresholdLabel(state: any): string {
   }
   const maxTime = Math.max(...(state.timeThresholds || [3600]));
   return `${Math.round(maxTime / 60)} min ${mode}`;
+}
+
+function getCoverageLevel(facilityCount: number): { label: string; color: string; icon: typeof CheckCircle; description: string } {
+  if (facilityCount >= 20) return {
+    label: 'Good',
+    color: 'text-success',
+    icon: CheckCircle,
+    description: 'Strong healthcare coverage with multiple facility types accessible.',
+  };
+  if (facilityCount >= 5) return {
+    label: 'Moderate',
+    color: 'text-chart-amber',
+    icon: Shield,
+    description: 'Some healthcare access available, but coverage could be improved.',
+  };
+  return {
+    label: 'Poor',
+    color: 'text-destructive',
+    icon: AlertTriangle,
+    description: 'Limited healthcare access. Consider expanding range or changing transport mode.',
+  };
 }
 
 function KPICard({ icon: Icon, label, value, subtitle, color = 'text-primary', tooltip }: {
@@ -203,10 +224,14 @@ export function SummaryTab() {
   const methodTooltip = result.populationMethod
     || 'Population estimates based on WorldPop country-level density data with spatial intersection against isochrone geometry.';
 
+  // Coverage level
+  const coverage = getCoverageLevel(result.facilities.length);
+  const CoverageIcon = coverage.icon;
+
   // Key insight line
   const keyInsight = result.facilities.length > 0
     ? `${result.facilities.length} health facilities are reachable within ${thresholdLabel}, covering an estimated ${formatPopulation(result.populationCovered)} people.`
-    : `No health facilities found within ${thresholdLabel}.`;
+    : `No health facilities found within ${thresholdLabel}. Try increasing the range or switching transport mode.`;
 
   return (
     <div className="space-y-3 p-3">
@@ -221,6 +246,18 @@ export function SummaryTab() {
       {/* Key Insight */}
       <div className="p-3 rounded-lg bg-primary/5 border border-primary/10">
         <p className="text-xs font-medium text-foreground leading-relaxed">{keyInsight}</p>
+      </div>
+
+      {/* Coverage Level */}
+      <div className="flex items-center gap-3 p-2.5 rounded-lg border border-border bg-card">
+        <CoverageIcon className={`w-5 h-5 ${coverage.color}`} />
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold">Coverage Level:</span>
+            <span className={`text-xs font-bold ${coverage.color}`}>{coverage.label}</span>
+          </div>
+          <p className="text-[10px] text-muted-foreground mt-0.5">{coverage.description}</p>
+        </div>
       </div>
 
       {/* Coverage Threshold Badge */}
@@ -282,12 +319,18 @@ export function SummaryTab() {
               <BarChart data={chartData}>
                 <XAxis dataKey="name" tick={{ fontSize: 10 }} />
                 <YAxis tick={{ fontSize: 10 }} />
-                <Bar dataKey="count" fill="hsl(210, 80%, 45%)" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="count" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
       )}
+
+      {/* Data source attribution */}
+      <div className="text-[10px] text-muted-foreground space-y-0.5 pt-2 border-t border-border">
+        <p>📍 Facility data: OpenStreetMap contributors</p>
+        <p>📊 Travel time estimated using road network data</p>
+      </div>
     </div>
   );
 }

@@ -253,10 +253,10 @@ export function TopBar() {
   ]);
 
   return (
-    <header className="bg-white border-b border-gray-200 shadow-[0_1px_2px_rgba(0,0,0,0.05)] z-50 relative">
+    <header className="bg-card border-b border-border shadow-sm z-50 relative">
       <div className="h-14 px-3 md:px-5 flex items-center gap-3">
         <div className="flex items-center gap-2 min-w-0">
-          <div className="w-10 h-10 rounded-lg bg-white flex items-center justify-center overflow-hidden shrink-0">
+          <div className="w-10 h-10 rounded-lg bg-card flex items-center justify-center overflow-hidden shrink-0">
             <img
               src="/iso (2).png"
               alt="iso-Health logo"
@@ -265,31 +265,31 @@ export function TopBar() {
           </div>
 
           <div className="flex flex-col leading-none min-w-0">
-            <span className="text-sm font-semibold text-gray-900 tracking-tight">
+            <span className="text-sm font-semibold text-foreground tracking-tight">
               isoHealth
             </span>
-            <span className="text-[10px] text-gray-500 truncate max-w-[220px] sm:max-w-[320px] md:max-w-[420px]">
+            <span className="text-[10px] text-muted-foreground truncate max-w-[220px] sm:max-w-[320px] md:max-w-[420px]">
               {contextText}
             </span>
           </div>
         </div>
 
-        <div className="ml-auto flex items-center gap-2 pl-3 border-l border-gray-200">
+        <div className="ml-auto flex items-center gap-2 pl-3 border-l border-border">
           <div className="relative" ref={searchWrapRef}>
             <Button
               size="sm"
               type="button"
               onClick={() => setSearchOpen((prev) => !prev)}
-              className="h-9 w-9 p-0 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200 shadow-none"
+              className="h-9 w-9 p-0 rounded-lg bg-secondary text-secondary-foreground hover:bg-secondary/80 border border-border shadow-none"
               title="Search location"
             >
               <Search className="w-4 h-4" />
             </Button>
 
             {searchOpen && (
-              <div className="absolute right-full top-1/2 mr-2 -translate-y-1/2 w-[280px] sm:w-[340px] bg-white border border-gray-200 rounded-xl shadow-lg p-2 z-50">
+              <div className="absolute right-full top-1/2 mr-2 -translate-y-1/2 w-[280px] sm:w-[340px] bg-card border border-border rounded-xl shadow-lg p-2 z-50">
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <input
                     autoFocus
                     type="text"
@@ -297,22 +297,22 @@ export function TopBar() {
                     value={searchQuery}
                     onChange={handleSearchInputChange}
                     onKeyDown={handleKeyDown}
-                    className="w-full h-10 pl-9 pr-16 rounded-lg border border-gray-200 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1773cf]/20 focus:border-[#1773cf]"
+                    className="w-full h-10 pl-9 pr-16 rounded-lg border border-border text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-background"
                   />
                   <button
                     type="button"
                     onClick={handleSearch}
-                    className="absolute right-1.5 top-1/2 -translate-y-1/2 h-7 px-2.5 rounded-md bg-[#1773cf] text-white text-xs font-medium hover:bg-[#1567b9] transition-colors"
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 h-7 px-2.5 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors"
                   >
                     Go
                   </button>
                   {/* Suggestions Dropdown */}
                   {suggestions.length > 0 && (
-                    <div className="absolute left-0 top-full mt-2 w-full bg-white border border-gray-200 shadow-lg rounded-lg z-50">
+                    <div className="absolute left-0 top-full mt-2 w-full bg-card border border-border shadow-lg rounded-lg z-50">
                       {suggestions.map((suggestion: any) => (
                         <button
                           key={suggestion.place_id}
-                          className="w-full text-left p-2 text-sm text-slate-700 hover:bg-gray-100"
+                          className="w-full text-left p-2 text-sm text-foreground hover:bg-secondary"
                           onClick={() => {
                             setSearchQuery(suggestion.display_name);
                             handleSearch();
@@ -332,7 +332,7 @@ export function TopBar() {
             size="sm"
             onClick={handleUseMyLocation}
             disabled={locating}
-            className="h-9 px-3 rounded-lg bg-[#1773cf] text-white hover:bg-[#1567b9] border-0 shadow-none gap-1.5"
+            className="h-9 px-3 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 border-0 shadow-none gap-1.5"
           >
             {locating ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -348,7 +348,7 @@ export function TopBar() {
             size="sm"
             type="button"
             onClick={handleReset}
-            className="h-9 w-9 p-0 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200 shadow-none"
+            className="h-9 w-9 p-0 rounded-lg bg-secondary text-secondary-foreground hover:bg-secondary/80 border border-border shadow-none"
             title="Reset analysis"
           >
             <RotateCcw className="w-4 h-4" />
@@ -359,7 +359,7 @@ export function TopBar() {
               <DropdownMenuTrigger asChild>
                 <Button
                   size="sm"
-                  className="h-9 px-3 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200 shadow-none gap-2"
+                  className="h-9 px-3 rounded-lg bg-secondary text-secondary-foreground hover:bg-secondary/80 border border-border shadow-none gap-2"
                 >
                   <User className="w-4 h-4" />
                   <span className="hidden md:inline max-w-[100px] truncate">
@@ -393,7 +393,7 @@ export function TopBar() {
             <Button
               size="sm"
               onClick={() => navigate('/auth')}
-              className="h-9 px-3 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200 shadow-none gap-1.5"
+              className="h-9 px-3 rounded-lg bg-secondary text-secondary-foreground hover:bg-secondary/80 border border-border shadow-none gap-1.5"
             >
               <LogIn className="w-4 h-4" />
               <span className="hidden md:inline">Sign In</span>
