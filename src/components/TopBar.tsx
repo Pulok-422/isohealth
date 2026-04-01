@@ -302,7 +302,7 @@ export function TopBar() {
                   <button
                     type="button"
                     onClick={handleSearch}
-                    className="absolute right-1.5 top-1/2 -translate-y-1/2 h-7 px-2.5 rounded-md bg-[#1773cf] text-white text-xs font-medium hover:bg-[#1567b9] transition-colors"
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 h-7 px-2.5 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors"
                   >
                     Go
                   </button>
