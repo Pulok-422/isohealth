@@ -287,7 +287,7 @@ export function TopBar() {
             </Button>
 
             {searchOpen && (
-              <div className="absolute right-full top-1/2 mr-2 -translate-y-1/2 w-[280px] sm:w-[340px] bg-white border border-gray-200 rounded-xl shadow-lg p-2 z-50">
+              <div className="absolute right-full top-1/2 mr-2 -translate-y-1/2 w-[280px] sm:w-[340px] bg-card border border-border rounded-xl shadow-lg p-2 z-50">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <input
