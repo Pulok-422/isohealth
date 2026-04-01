@@ -332,7 +332,7 @@ export function TopBar() {
             size="sm"
             onClick={handleUseMyLocation}
             disabled={locating}
-            className="h-9 px-3 rounded-lg bg-[#1773cf] text-white hover:bg-[#1567b9] border-0 shadow-none gap-1.5"
+            className="h-9 px-3 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 border-0 shadow-none gap-1.5"
           >
             {locating ? (
               <Loader2 className="w-4 h-4 animate-spin" />
