@@ -348,7 +348,7 @@ export function TopBar() {
             size="sm"
             type="button"
             onClick={handleReset}
-            className="h-9 w-9 p-0 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200 shadow-none"
+            className="h-9 w-9 p-0 rounded-lg bg-secondary text-secondary-foreground hover:bg-secondary/80 border border-border shadow-none"
             title="Reset analysis"
           >
             <RotateCcw className="w-4 h-4" />
