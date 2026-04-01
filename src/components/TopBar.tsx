@@ -253,7 +253,7 @@ export function TopBar() {
   ]);
 
   return (
-    <header className="bg-white border-b border-gray-200 shadow-[0_1px_2px_rgba(0,0,0,0.05)] z-50 relative">
+    <header className="bg-card border-b border-border shadow-sm z-50 relative">
       <div className="h-14 px-3 md:px-5 flex items-center gap-3">
         <div className="flex items-center gap-2 min-w-0">
           <div className="w-10 h-10 rounded-lg bg-white flex items-center justify-center overflow-hidden shrink-0">
