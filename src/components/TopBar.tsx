@@ -274,7 +274,7 @@ export function TopBar() {
           </div>
         </div>
 
-        <div className="ml-auto flex items-center gap-2 pl-3 border-l border-gray-200">
+        <div className="ml-auto flex items-center gap-2 pl-3 border-l border-border">
           <div className="relative" ref={searchWrapRef}>
             <Button
               size="sm"
