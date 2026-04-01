@@ -297,7 +297,7 @@ export function TopBar() {
                     value={searchQuery}
                     onChange={handleSearchInputChange}
                     onKeyDown={handleKeyDown}
-                    className="w-full h-10 pl-9 pr-16 rounded-lg border border-gray-200 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1773cf]/20 focus:border-[#1773cf]"
+                    className="w-full h-10 pl-9 pr-16 rounded-lg border border-border text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary bg-background"
                   />
                   <button
                     type="button"
