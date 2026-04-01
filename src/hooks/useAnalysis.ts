@@ -246,20 +246,20 @@ export function useAnalysis() {
         const suggestions = suggestFacilityLocations(underserved);
         dispatch({ type: 'SET_OPTIMIZATION', payload: suggestions });
 
+        const visitorId = getVisitorId();
         supabase.auth.getUser().then(({ data: { user } }) => {
-          if (user) {
-            supabase
-              .from('isochrone_requests')
-              .insert({
-                user_id: user.id,
-                latitude: lat,
-                longitude: lon,
-                profile: transportProfile,
-                ranges: ranges as any,
-                request_type: rangeType,
-              })
-              .then(() => {});
-          }
+          supabase
+            .from('isochrone_requests')
+            .insert({
+              user_id: user?.id || null,
+              visitor_id: visitorId,
+              latitude: lat,
+              longitude: lon,
+              profile: transportProfile,
+              ranges: ranges as any,
+              request_type: rangeType,
+            })
+            .then(() => {});
         });
 
         toast.success(
