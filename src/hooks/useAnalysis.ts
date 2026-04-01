@@ -11,6 +11,7 @@ import {
 import { getBBoxFromIsochrones, getPopulationEstimate } from '@/lib/population';
 import type { PopulationSource } from '@/lib/population';
 import { supabase } from '@/integrations/supabase/client';
+import { getVisitorId } from '@/lib/visitor';
 import { toast } from 'sonner';
 
 const cache = new Map<string, { data: any; ts: number }>();
