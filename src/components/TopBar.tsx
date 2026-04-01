@@ -312,7 +312,7 @@ export function TopBar() {
                       {suggestions.map((suggestion: any) => (
                         <button
                           key={suggestion.place_id}
-                          className="w-full text-left p-2 text-sm text-slate-700 hover:bg-gray-100"
+                          className="w-full text-left p-2 text-sm text-foreground hover:bg-secondary"
                           onClick={() => {
                             setSearchQuery(suggestion.display_name);
                             handleSearch();
