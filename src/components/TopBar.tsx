@@ -359,7 +359,7 @@ export function TopBar() {
               <DropdownMenuTrigger asChild>
                 <Button
                   size="sm"
-                  className="h-9 px-3 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200 shadow-none gap-2"
+                  className="h-9 px-3 rounded-lg bg-secondary text-secondary-foreground hover:bg-secondary/80 border border-border shadow-none gap-2"
                 >
                   <User className="w-4 h-4" />
                   <span className="hidden md:inline max-w-[100px] truncate">
