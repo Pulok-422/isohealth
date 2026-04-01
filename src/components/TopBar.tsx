@@ -308,7 +308,7 @@ export function TopBar() {
                   </button>
                   {/* Suggestions Dropdown */}
                   {suggestions.length > 0 && (
-                    <div className="absolute left-0 top-full mt-2 w-full bg-white border border-gray-200 shadow-lg rounded-lg z-50">
+                    <div className="absolute left-0 top-full mt-2 w-full bg-card border border-border shadow-lg rounded-lg z-50">
                       {suggestions.map((suggestion: any) => (
                         <button
                           key={suggestion.place_id}
