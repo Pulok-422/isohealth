@@ -268,7 +268,7 @@ export function TopBar() {
             <span className="text-sm font-semibold text-foreground tracking-tight">
               isoHealth
             </span>
-            <span className="text-[10px] text-gray-500 truncate max-w-[220px] sm:max-w-[320px] md:max-w-[420px]">
+            <span className="text-[10px] text-muted-foreground truncate max-w-[220px] sm:max-w-[320px] md:max-w-[420px]">
               {contextText}
             </span>
           </div>
