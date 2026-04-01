@@ -256,7 +256,7 @@ export function TopBar() {
     <header className="bg-card border-b border-border shadow-sm z-50 relative">
       <div className="h-14 px-3 md:px-5 flex items-center gap-3">
         <div className="flex items-center gap-2 min-w-0">
-          <div className="w-10 h-10 rounded-lg bg-white flex items-center justify-center overflow-hidden shrink-0">
+          <div className="w-10 h-10 rounded-lg bg-card flex items-center justify-center overflow-hidden shrink-0">
             <img
               src="/iso (2).png"
               alt="iso-Health logo"
