@@ -39,7 +39,7 @@ type Action =
   | { type: 'SET_FACILITIES'; payload: Facility[] }
   | { type: 'SET_SIMULATED_FACILITIES'; payload: Facility[] }
   | { type: 'ADD_SIMULATED_FACILITY'; payload: Facility }
-  | { type: 'REMOVE_SIMULATED_FACILITY'; payload: number }
+  | { type: 'REMOVE_SIMULATED_FACILITY'; payload: number | string }
   | { type: 'SET_ANALYSIS_RESULT'; payload: AnalysisResult | null }
   | { type: 'SET_POPULATION'; payload: PopulationPoint[] }
   | { type: 'SET_ANALYZING'; payload: boolean }
