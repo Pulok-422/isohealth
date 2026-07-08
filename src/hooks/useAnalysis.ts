@@ -117,10 +117,6 @@ export function useAnalysis() {
         let facilities = getCached(facKey);
         let isochrones = getCached(isoKey);
 
-        const promises: Promise<any>[] = [];
-
-        // Prioritize isochrones; fetch facilities in parallel but don't let
-        // a facility failure block map rendering.
         const isoPromise = isochrones
           ? Promise.resolve(isochrones)
           : generateIsochrones(lat, lon, transportProfile, ranges, rangeType).then((i) => {
@@ -131,6 +127,7 @@ export function useAnalysis() {
         const facPromise = facilities
           ? Promise.resolve(facilities)
           : fetchFacilities(lat, lon, state.searchRadius).then((f) => {
+              console.log('Fetched facilities:', f.length, f);
               setCache(facKey, f);
               return f;
             });
@@ -142,14 +139,16 @@ export function useAnalysis() {
             ? isoSettled.reason
             : new Error(String(isoSettled.reason));
         }
+
         isochrones = isoSettled.value;
 
         if (facSettled.status === 'fulfilled') {
-          facilities = facSettled.value;
+          facilities = Array.isArray(facSettled.value) ? facSettled.value : [];
+          console.log('Facilities available for analysis:', facilities.length, facilities);
         } else {
           facilities = [];
           console.warn('Facility fetch failed:', facSettled.reason);
-          toast.warning('Facility data unavailable — showing isochrone only');
+          toast.warning('Facility service is temporarily unavailable — showing isochrone only');
         }
 
         console.log('Analysis profile used:', transportProfile);
@@ -208,7 +207,9 @@ export function useAnalysis() {
             isochrones,
             nearestFacility,
             nearestDistance: nearestDistance ? nearestDistance * 1000 : null,
-            nearestDuration: nearestDistance ? estimateTravelTime(nearestDistance * 1000, transportProfile) : null,
+            nearestDuration: nearestDistance
+              ? estimateTravelTime(nearestDistance * 1000, transportProfile)
+              : null,
             populationCovered,
             populationUnderserved,
             totalPopulation,
@@ -222,11 +223,13 @@ export function useAnalysis() {
         const suggestions = suggestFacilityLocations(underserved);
         dispatch({ type: 'SET_OPTIMIZATION', payload: suggestions });
 
-        toast.success(
-          reachableFacilities.length > 0
-            ? `Found ${reachableFacilities.length} healthcare facilities within reach`
-            : 'No health facilities found nearby — try expanding the range'
-        );
+        if ((facilities || []).length === 0) {
+          toast.warning('No mapped health facilities were found nearby in OpenStreetMap');
+        } else if (reachableFacilities.length > 0) {
+          toast.success(`Found ${reachableFacilities.length} healthcare facilities within reach`);
+        } else {
+          toast.warning('Facilities were found nearby, but none are inside the selected travel-time area');
+        }
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
         console.error('Analysis error:', error);
