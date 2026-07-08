@@ -57,22 +57,25 @@ const BASEMAPS = {
   },
 };
 
-function createFacilityIcon(type: string, isSimulated = false) {
+function createFacilityIcon(type: string, isSimulated = false, isInsideIsochrone = true) {
   const icons: Record<string, string> = {
     hospital: '🏥',
-    clinic: '🏨',
+    clinic: '⚕️',
     pharmacy: '💊',
     doctors: '👨‍⚕️',
-    healthcare: '⚕️',
+    healthcare: '+',
   };
 
   const emoji = icons[type] || '⚕️';
   const border = isSimulated
     ? 'border: 2px dashed hsl(38, 90%, 55%);'
-    : 'border: 1px solid hsl(220, 13%, 85%);';
+    : isInsideIsochrone
+    ? 'border: 2px solid hsl(210, 80%, 45%);'
+    : 'border: 1px solid hsl(220, 13%, 75%);';
+  const opacity = isInsideIsochrone || isSimulated ? 1 : 0.62;
 
   return L.divIcon({
-    html: `<div style="font-size:18px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;background:white;border-radius:50%;${border}box-shadow:0 2px 6px rgba(0,0,0,0.15);">${emoji}</div>`,
+    html: `<div style="font-size:18px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;background:white;border-radius:50%;${border}opacity:${opacity};box-shadow:0 2px 6px rgba(0,0,0,0.15);font-weight:700;color:hsl(210,80%,35%);">${emoji}</div>`,
     className: '',
     iconSize: [32, 32],
     iconAnchor: [16, 16],
@@ -452,57 +455,68 @@ function MapClickHandler() {
   return null;
 }
 
-function ClusteredFacilityMarkers({ facilities }: { facilities: Facility[] }) {
+function ClusteredFacilityMarkers({
+  facilities,
+  insideFacilityIds,
+}: {
+  facilities: Facility[];
+  insideFacilityIds: Set<number | string>;
+}) {
   const map = useMap();
   const { state } = useAppState();
-  const clusterRef = useRef<L.MarkerClusterGroup | null>(null);
+  const layerRef = useRef<L.LayerGroup | null>(null);
 
   useEffect(() => {
-    if (clusterRef.current) {
-      map.removeLayer(clusterRef.current);
-      clusterRef.current = null;
+    if (layerRef.current) {
+      map.removeLayer(layerRef.current);
+      layerRef.current = null;
     }
 
-    const cluster = (L as any).markerClusterGroup({
-      maxClusterRadius: 50,
-      spiderfyOnMaxZoom: true,
-      showCoverageOnHover: false,
-      zoomToBoundsOnClick: true,
-      disableClusteringAtZoom: 14,
-      iconCreateFunction: (c: any) => {
-        const count = c.getChildCount();
+    const canCluster = typeof (L as any).markerClusterGroup === 'function';
+    const layer: L.LayerGroup = canCluster
+      ? (L as any).markerClusterGroup({
+          maxClusterRadius: 50,
+          spiderfyOnMaxZoom: true,
+          showCoverageOnHover: false,
+          zoomToBoundsOnClick: true,
+          disableClusteringAtZoom: 14,
+          iconCreateFunction: (c: any) => {
+            const count = c.getChildCount();
 
-        return L.divIcon({
-          html: `<div style="width:36px;height:36px;display:flex;align-items:center;justify-content:center;background:hsl(210,80%,45%);color:white;border-radius:50%;font-size:12px;font-weight:600;box-shadow:0 2px 6px rgba(0,0,0,0.2);border:2px solid white;">${count}</div>`,
-          className: '',
-          iconSize: [36, 36],
-          iconAnchor: [18, 18],
-        });
-      },
-    });
+            return L.divIcon({
+              html: `<div style="width:36px;height:36px;display:flex;align-items:center;justify-content:center;background:hsl(210,80%,45%);color:white;border-radius:50%;font-size:12px;font-weight:600;box-shadow:0 2px 6px rgba(0,0,0,0.2);border:2px solid white;">${count}</div>`,
+              className: '',
+              iconSize: [36, 36],
+              iconAnchor: [18, 18],
+            });
+          },
+        })
+      : L.layerGroup();
 
     const profile = (state.analysisResult?.profileUsed || state.transportProfile) as TransportProfile;
     const point = state.analysisPoint;
 
     facilities.forEach((f) => {
+      const isInside = f.isSimulated || insideFacilityIds.has(f.id);
+
       const marker = L.marker([f.lat, f.lon], {
-        icon: createFacilityIcon(f.type, f.isSimulated),
+        icon: createFacilityIcon(f.type, f.isSimulated, isInside),
       });
 
       marker.bindPopup(buildFacilityPopupHtml(f, point, profile));
-      cluster.addLayer(marker);
+      layer.addLayer(marker);
     });
 
-    map.addLayer(cluster);
-    clusterRef.current = cluster;
+    map.addLayer(layer);
+    layerRef.current = layer;
 
     return () => {
-      if (clusterRef.current) {
-        map.removeLayer(clusterRef.current);
-        clusterRef.current = null;
+      if (layerRef.current) {
+        map.removeLayer(layerRef.current);
+        layerRef.current = null;
       }
     };
-  }, [facilities, map, state.analysisPoint, state.transportProfile, state.analysisResult?.profileUsed]);
+  }, [facilities, insideFacilityIds, map, state.analysisPoint, state.transportProfile, state.analysisResult?.profileUsed]);
 
   return null;
 }
@@ -775,12 +789,20 @@ export function HealthMap() {
     return getOutermostIsochroneGeometry(state.analysisResult?.isochrones);
   }, [state.analysisResult?.isochrones]);
 
-  const visibleFacilities = useMemo(() => {
-    if (!outerGeometry) return [];
-    return allFacilities.filter((facility) =>
-      pointInGeometry([facility.lon, facility.lat], outerGeometry)
-    );
+  const insideFacilityIds = useMemo(() => {
+    const ids = new Set<number | string>();
+    if (!outerGeometry) return ids;
+
+    allFacilities.forEach((facility) => {
+      if (facility.isSimulated || pointInGeometry([facility.lon, facility.lat], outerGeometry)) {
+        ids.add(facility.id);
+      }
+    });
+
+    return ids;
   }, [allFacilities, outerGeometry]);
+
+  const visibleFacilities = allFacilities;
 
   const isochroneRenderSignature = useMemo(() => {
     return buildIsochroneSignature(
@@ -827,7 +849,10 @@ export function HealthMap() {
         )}
 
         {state.showFacilities && visibleFacilities.length > 0 && (
-          <ClusteredFacilityMarkers facilities={visibleFacilities} />
+          <ClusteredFacilityMarkers
+            facilities={visibleFacilities}
+            insideFacilityIds={insideFacilityIds}
+          />
         )}
 
         <OptimizationMarkers />
