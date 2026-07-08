@@ -1,14 +1,10 @@
-import { Building2, MapPin, Users, Clock, Ruler, Save, Info, Zap, Shield, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Building2, MapPin, Users, Clock, Info, Zap, Shield, AlertTriangle, CheckCircle } from 'lucide-react';
 import { useAppState } from '@/context/AppContext';
-import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
 import { formatDistanceCompact, formatTravelTime } from '@/lib/travelTime';
 import { haversine } from '@/lib/analysis';
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer } from 'recharts';
-import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { toast } from 'sonner';
-import { useState, useMemo } from 'react';
+import { useMemo } from 'react';
 import type { Facility, TransportProfile } from '@/types/health';
 
 function formatPopulation(n: number): string {
@@ -170,31 +166,10 @@ function FacilityMixInsight({ facilities }: { facilities: Facility[] }) {
 
 export function SummaryTab() {
   const { state } = useAppState();
-  const { user } = useAuth();
   const result = state.analysisResult;
-  const [saving, setSaving] = useState(false);
 
   const profile = (result?.profileUsed || state.transportProfile) as TransportProfile;
   const thresholdLabel = getThresholdLabel(state);
-
-  const handleSave = async () => {
-    if (!user || !result) return;
-    setSaving(true);
-    const { error } = await supabase.from('saved_analyses').insert({
-      user_id: user.id,
-      title: `Analysis at ${state.analysisPoint?.[0].toFixed(4)}, ${state.analysisPoint?.[1].toFixed(4)}`,
-      latitude: state.analysisPoint?.[0] || 0,
-      longitude: state.analysisPoint?.[1] || 0,
-      settings_json: { transportProfile: state.transportProfile, thresholds: state.timeThresholds },
-      results_json: {
-        facilityCount: result.facilities.length,
-        populationCovered: result.populationCovered,
-      },
-    });
-    setSaving(false);
-    if (error) toast.error('Failed to save');
-    else toast.success('Analysis saved to dashboard');
-  };
 
   if (!result) {
     return (
@@ -217,13 +192,6 @@ export function SummaryTab() {
 
   const chartData = Object.entries(facilityTypes).map(([name, count]) => ({ name, count }));
 
-  const sourceLabel = result.populationSource === 'worldpop'
-    ? 'WorldPop (estimated)'
-    : 'Simulated (fallback)';
-
-  const methodTooltip = result.populationMethod
-    || 'Population estimates based on WorldPop country-level density data with spatial intersection against isochrone geometry.';
-
   // Coverage level
   const coverage = getCoverageLevel(result.facilities.length);
   const CoverageIcon = coverage.icon;
@@ -235,14 +203,6 @@ export function SummaryTab() {
 
   return (
     <div className="space-y-3 p-3">
-      {/* Save button */}
-      {user && (
-        <Button size="sm" variant="outline" onClick={handleSave} disabled={saving} className="w-full gap-1.5">
-          <Save className="w-3.5 h-3.5" />
-          {saving ? 'Saving...' : 'Save Analysis'}
-        </Button>
-      )}
-
       {/* Key Insight */}
       <div className="p-3 rounded-lg bg-primary/5 border border-primary/10">
         <p className="text-xs font-medium text-foreground leading-relaxed">{keyInsight}</p>
@@ -272,11 +232,11 @@ export function SummaryTab() {
           <TooltipTrigger asChild>
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-help">
               <Info className="w-3 h-3" />
-              Population Source: <span className="font-medium text-foreground">{sourceLabel}</span>
+              Population Source: <span className="font-medium text-foreground">Estimated (local model)</span>
             </div>
           </TooltipTrigger>
           <TooltipContent className="max-w-[300px] text-xs">
-            <p>{methodTooltip}</p>
+            <p>Population figures are rough estimates generated locally in your browser from a synthetic density grid. No user data is stored.</p>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
