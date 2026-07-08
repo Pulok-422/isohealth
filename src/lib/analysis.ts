@@ -162,3 +162,39 @@ export function formatDistance(meters: number): string {
   if (meters < 1000) return `${Math.round(meters)}m`;
   return `${(meters / 1000).toFixed(1)} km`;
 }
+
+// Compute bounding box [minLon, minLat, maxLon, maxLat] from an isochrone FeatureCollection
+export function getBBoxFromIsochrones(
+  isochrones: FeatureCollection | null | undefined
+): [number, number, number, number] | null {
+  if (!isochrones?.features?.length) return null;
+
+  let minLon = Infinity;
+  let minLat = Infinity;
+  let maxLon = -Infinity;
+  let maxLat = -Infinity;
+
+  const walkRing = (ring: number[][]) => {
+    for (const [lon, lat] of ring) {
+      if (lon < minLon) minLon = lon;
+      if (lat < minLat) minLat = lat;
+      if (lon > maxLon) maxLon = lon;
+      if (lat > maxLat) maxLat = lat;
+    }
+  };
+
+  for (const feature of isochrones.features) {
+    const geom: any = feature.geometry;
+    if (!geom) continue;
+    if (geom.type === 'Polygon') {
+      for (const ring of geom.coordinates) walkRing(ring);
+    } else if (geom.type === 'MultiPolygon') {
+      for (const polygon of geom.coordinates) {
+        for (const ring of polygon) walkRing(ring);
+      }
+    }
+  }
+
+  if (!Number.isFinite(minLon)) return null;
+  return [minLon, minLat, maxLon, maxLat];
+}
