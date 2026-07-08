@@ -111,7 +111,7 @@ export function useAnalysis() {
 
         const rangeType = analysisType;
 
-        const facKey = `fac-${lat.toFixed(3)}-${lon.toFixed(3)}-${state.searchRadius}`;
+        const facKey = `fac-v4-${lat.toFixed(3)}-${lon.toFixed(3)}-${state.searchRadius}`;
         const isoKey = `iso-${lat.toFixed(3)}-${lon.toFixed(3)}-${transportProfile}-${rangeType}-${ranges.join(',')}`;
 
         let facilities = getCached(facKey);
@@ -128,7 +128,10 @@ export function useAnalysis() {
           ? Promise.resolve(facilities)
           : fetchFacilities(lat, lon, state.searchRadius).then((f) => {
               console.log('Fetched facilities:', f.length, f);
-              setCache(facKey, f);
+
+              // Do not cache empty results. Empty results may be caused by temporary Overpass timeout.
+              if (Array.isArray(f) && f.length > 0) setCache(facKey, f);
+
               return f;
             });
 
