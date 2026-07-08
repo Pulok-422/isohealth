@@ -4,27 +4,27 @@ export const config = {
   maxDuration: 10,
 };
 
+const VERSION = 'v6-node-only-debug';
+
 type FacilityType = 'hospital' | 'clinic' | 'pharmacy' | 'doctors' | 'healthcare';
 
-type RawElement = {
+type RawNode = {
   type?: string;
   id?: number | string;
   lat?: number;
   lon?: number;
-  center?: { lat?: number; lon?: number };
   tags?: Record<string, any>;
 };
 
 const OVERPASS_ENDPOINTS = [
   'https://overpass-api.de/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
-  'https://overpass.openstreetmap.ru/api/interpreter',
 ];
 
 function clampRadius(radius: unknown) {
   const parsed = Number(radius);
-  if (!Number.isFinite(parsed)) return 8000;
-  return Math.min(Math.max(parsed, 1000), 10000);
+  if (!Number.isFinite(parsed)) return 5000;
+  return Math.min(Math.max(parsed, 1000), 7000);
 }
 
 function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
@@ -41,135 +41,83 @@ function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-function bboxFromRadius(lat: number, lon: number, radiusMeters: number) {
-  const radiusKm = radiusMeters / 1000;
-  const latDelta = radiusKm / 111;
-  const lonDelta = radiusKm / (111 * Math.max(Math.cos((lat * Math.PI) / 180), 0.15));
-
-  return {
-    south: lat - latDelta,
-    west: lon - lonDelta,
-    north: lat + latDelta,
-    east: lon + lonDelta,
-  };
-}
-
-function buildMainQuery(lat: number, lon: number, radius: number) {
+function buildNodeAroundQuery(lat: number, lon: number, radius: number) {
   return `
-[out:json][timeout:8];
+[out:json][timeout:7];
 (
-  node["amenity"~"^(hospital|clinic|pharmacy|doctors|dentist)$"](around:${radius},${lat},${lon});
-  way["amenity"~"^(hospital|clinic|pharmacy|doctors|dentist)$"](around:${radius},${lat},${lon});
-  relation["amenity"~"^(hospital|clinic|pharmacy|doctors|dentist)$"](around:${radius},${lat},${lon});
+  node["amenity"="hospital"](around:${radius},${lat},${lon});
+  node["amenity"="clinic"](around:${radius},${lat},${lon});
+  node["amenity"="pharmacy"](around:${radius},${lat},${lon});
+  node["amenity"="doctors"](around:${radius},${lat},${lon});
+  node["amenity"="dentist"](around:${radius},${lat},${lon});
 
-  node["healthcare"](around:${radius},${lat},${lon});
-  way["healthcare"](around:${radius},${lat},${lon});
-  relation["healthcare"](around:${radius},${lat},${lon});
-
-  node["name"~"hospital|clinic|pharmacy|medical|diagnostic|doctor|health|care|হাসপাতাল|ক্লিনিক|ফার্মেসি|ডায়াগনস্টিক|ডায়াগনস্টিক|মেডিকেল|ডাক্তার|স্বাস্থ্য",i](around:${radius},${lat},${lon});
-  way["name"~"hospital|clinic|pharmacy|medical|diagnostic|doctor|health|care|হাসপাতাল|ক্লিনিক|ফার্মেসি|ডায়াগনস্টিক|ডায়াগনস্টিক|মেডিকেল|ডাক্তার|স্বাস্থ্য",i](around:${radius},${lat},${lon});
-  relation["name"~"hospital|clinic|pharmacy|medical|diagnostic|doctor|health|care|হাসপাতাল|ক্লিনিক|ফার্মেসি|ডায়াগনস্টিক|ডায়াগনস্টিক|মেডিকেল|ডাক্তার|স্বাস্থ্য",i](around:${radius},${lat},${lon});
+  node["healthcare"="hospital"](around:${radius},${lat},${lon});
+  node["healthcare"="clinic"](around:${radius},${lat},${lon});
+  node["healthcare"="pharmacy"](around:${radius},${lat},${lon});
+  node["healthcare"="doctor"](around:${radius},${lat},${lon});
+  node["healthcare"="doctors"](around:${radius},${lat},${lon});
+  node["healthcare"="centre"](around:${radius},${lat},${lon});
+  node["healthcare"="dentist"](around:${radius},${lat},${lon});
 );
-out body center 800;
+out body 300;
 `;
 }
 
-function buildBBoxFallbackQuery(lat: number, lon: number, radius: number) {
-  const b = bboxFromRadius(lat, lon, radius);
+function normaliseNode(el: RawNode, originLat: number, originLon: number) {
+  if (typeof el.lat !== 'number' || typeof el.lon !== 'number') return null;
 
-  return `
-[out:json][timeout:8];
-(
-  node["amenity"~"^(hospital|clinic|pharmacy|doctors|dentist)$"](${b.south},${b.west},${b.north},${b.east});
-  way["amenity"~"^(hospital|clinic|pharmacy|doctors|dentist)$"](${b.south},${b.west},${b.north},${b.east});
-  relation["amenity"~"^(hospital|clinic|pharmacy|doctors|dentist)$"](${b.south},${b.west},${b.north},${b.east});
-
-  node["healthcare"](${b.south},${b.west},${b.north},${b.east});
-  way["healthcare"](${b.south},${b.west},${b.north},${b.east});
-  relation["healthcare"](${b.south},${b.west},${b.north},${b.east});
-
-  node["name"~"hospital|clinic|pharmacy|medical|diagnostic|doctor|health|care|হাসপাতাল|ক্লিনিক|ফার্মেসি|ডায়াগনস্টিক|ডায়াগনস্টিক|মেডিকেল|ডাক্তার|স্বাস্থ্য",i](${b.south},${b.west},${b.north},${b.east});
-  way["name"~"hospital|clinic|pharmacy|medical|diagnostic|doctor|health|care|হাসপাতাল|ক্লিনিক|ফার্মেসি|ডায়াগনস্টিক|ডায়াগনস্টিক|মেডিকেল|ডাক্তার|স্বাস্থ্য",i](${b.south},${b.west},${b.north},${b.east});
-  relation["name"~"hospital|clinic|pharmacy|medical|diagnostic|doctor|health|care|হাসপাতাল|ক্লিনিক|ফার্মেসি|ডায়াগনস্টিক|ডায়াগনস্টিক|মেডিকেল|ডাক্তার|স্বাস্থ্য",i](${b.south},${b.west},${b.north},${b.east});
-);
-out body center 800;
-`;
-}
-
-function normaliseFacility(el: RawElement, originLat: number, originLon: number) {
-  const facilityLat = el.lat ?? el.center?.lat;
-  const facilityLon = el.lon ?? el.center?.lon;
   const tags = el.tags || {};
-
-  if (typeof facilityLat !== 'number' || typeof facilityLon !== 'number') return null;
-
   const amenity = String(tags.amenity || '').toLowerCase();
   const healthcare = String(tags.healthcare || '').toLowerCase();
-  const name = String(tags.name || tags['name:en'] || tags.brand || tags.operator || '').trim();
-  const searchable = `${amenity} ${healthcare} ${name}`.toLowerCase();
-
-  const looksHealthcare =
-    amenity === 'hospital' ||
-    amenity === 'clinic' ||
-    amenity === 'pharmacy' ||
-    amenity === 'doctors' ||
-    amenity === 'dentist' ||
-    healthcare.length > 0 ||
-    /hospital|clinic|pharmacy|medical|diagnostic|doctor|health|care|হাসপাতাল|ক্লিনিক|ফার্মেসি|ডায়াগনস্টিক|ডায়াগনস্টিক|মেডিকেল|ডাক্তার|স্বাস্থ্য/i.test(searchable);
-
-  if (!looksHealthcare) return null;
 
   let type: FacilityType = 'healthcare';
 
-  if (amenity === 'hospital' || healthcare === 'hospital' || /hospital|হাসপাতাল/i.test(name)) {
+  if (amenity === 'hospital' || healthcare === 'hospital') {
     type = 'hospital';
-  } else if (
-    amenity === 'clinic' ||
-    healthcare === 'clinic' ||
-    healthcare === 'centre' ||
-    /clinic|diagnostic|medical|health centre|ক্লিনিক|ডায়াগনস্টিক|ডায়াগনস্টিক|মেডিকেল/i.test(name)
-  ) {
+  } else if (amenity === 'clinic' || healthcare === 'clinic' || healthcare === 'centre') {
     type = 'clinic';
-  } else if (
-    amenity === 'pharmacy' ||
-    healthcare === 'pharmacy' ||
-    /pharmacy|drug|ফার্মেসি/i.test(name)
-  ) {
+  } else if (amenity === 'pharmacy' || healthcare === 'pharmacy') {
     type = 'pharmacy';
   } else if (
     amenity === 'doctors' ||
     amenity === 'dentist' ||
     healthcare === 'doctor' ||
     healthcare === 'doctors' ||
-    healthcare === 'dentist' ||
-    /doctor|physician|dentist|ডাক্তার/i.test(name)
+    healthcare === 'dentist'
   ) {
     type = 'doctors';
   }
 
-  const distanceKm = haversineKm(originLat, originLon, facilityLat, facilityLon);
+  const distanceKm = haversineKm(originLat, originLon, el.lat, el.lon);
 
   return {
-    id: `${el.type || 'osm'}-${el.id}`,
-    osmType: el.type,
+    id: `${el.type || 'node'}-${el.id}`,
+    osmType: el.type || 'node',
     osmId: el.id,
-    name: name || tags.operator || tags.brand || `${type.charAt(0).toUpperCase() + type.slice(1)}`,
+    name:
+      tags.name ||
+      tags['name:en'] ||
+      tags.operator ||
+      tags.brand ||
+      `${type.charAt(0).toUpperCase() + type.slice(1)}`,
     type,
-    lat: facilityLat,
-    lon: facilityLon,
+    lat: el.lat,
+    lon: el.lon,
     distanceKm,
     tags,
   };
 }
 
-async function queryOneEndpoint(endpoint: string, query: string, timeoutMs: number) {
+async function queryEndpoint(endpoint: string, query: string) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const timer = setTimeout(() => controller.abort(), 8500);
 
   try {
     const response = await fetch(endpoint, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+      },
       body: `data=${encodeURIComponent(query)}`,
       signal: controller.signal,
     });
@@ -177,7 +125,7 @@ async function queryOneEndpoint(endpoint: string, query: string, timeoutMs: numb
     const text = await response.text();
 
     if (!response.ok) {
-      throw new Error(`Overpass ${response.status}: ${text.slice(0, 220)}`);
+      throw new Error(`Overpass ${response.status}: ${text.slice(0, 200)}`);
     }
 
     return JSON.parse(text);
@@ -186,41 +134,19 @@ async function queryOneEndpoint(endpoint: string, query: string, timeoutMs: numb
   }
 }
 
-async function queryOverpass(query: string, timeoutMs = 8500) {
+async function queryOverpass(query: string) {
   let lastError = '';
 
   for (const endpoint of OVERPASS_ENDPOINTS) {
     try {
-      return await queryOneEndpoint(endpoint, query, timeoutMs);
+      return await queryEndpoint(endpoint, query);
     } catch (error: any) {
-      lastError = error?.message || 'Overpass request failed';
+      lastError = error?.message || 'Overpass failed';
       console.error('Overpass endpoint failed:', endpoint, lastError);
     }
   }
 
   throw new Error(lastError || 'All Overpass endpoints failed');
-}
-
-function uniqueFacilities(rawElements: RawElement[], lat: number, lon: number, radius: number) {
-  const facilities = rawElements
-    .map((el) => normaliseFacility(el, lat, lon))
-    .filter(Boolean)
-    .filter((f: any) => Number(f.distanceKm) * 1000 <= radius);
-
-  const seen = new Set<string>();
-
-  const unique = facilities.filter((f: any) => {
-    const key = f.osmId
-      ? `${f.osmType}-${f.osmId}`
-      : `${Number(f.lat).toFixed(5)},${Number(f.lon).toFixed(5)},${f.type},${f.name}`;
-
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-
-  unique.sort((a: any, b: any) => Number(a.distanceKm) - Number(b.distanceKm));
-  return unique;
 }
 
 const handler: Handler = async (req, res) => {
@@ -232,66 +158,85 @@ const handler: Handler = async (req, res) => {
   if (req.method === 'OPTIONS') return res.status(204).end();
 
   if (req.method !== 'POST') {
-    return res.status(405).json({ success: false, error: 'Method not allowed' });
+    return res.status(405).json({
+      success: false,
+      error: 'Method not allowed',
+      version: VERSION,
+    });
   }
 
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body || {};
+
     const lat = Number(body.lat);
     const lon = Number(body.lon);
+    const radius = clampRadius(body.radius);
 
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-      return res.status(400).json({ success: false, error: 'Invalid coordinates' });
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid coordinates',
+        version: VERSION,
+      });
     }
 
-    const radius = clampRadius(body.radius);
-    const debug: Record<string, any> = { lat, lon, radius, strategy: 'around-body-center' };
+    const query = buildNodeAroundQuery(lat, lon, radius);
 
-    let rawElements: RawElement[] = [];
+    let rawElements: RawNode[] = [];
     let warning = '';
 
     try {
-      const raw = await queryOverpass(buildMainQuery(lat, lon, radius), 8500);
-      rawElements = raw?.elements || [];
-      debug.rawElementCount = rawElements.length;
+      const raw = await queryOverpass(query);
+      rawElements = Array.isArray(raw?.elements) ? raw.elements : [];
     } catch (error: any) {
-      warning = error?.message || 'Around Overpass query failed';
-      debug.aroundError = warning;
-      console.error('Facility around query failed:', warning);
+      warning = error?.message || 'Overpass query failed';
+      console.error('Facility node-only query failed:', warning);
     }
 
-    let unique = uniqueFacilities(rawElements, lat, lon, radius);
+    const facilities = rawElements
+      .map((el) => normaliseNode(el, lat, lon))
+      .filter(Boolean)
+      .filter((f: any) => Number(f.distanceKm) * 1000 <= radius);
 
-    if (unique.length === 0) {
-      try {
-        debug.strategy = 'bbox-body-center-fallback';
-        const raw = await queryOverpass(buildBBoxFallbackQuery(lat, lon, radius), 8500);
-        const fallbackElements = raw?.elements || [];
-        debug.fallbackRawElementCount = fallbackElements.length;
-        unique = uniqueFacilities(fallbackElements, lat, lon, radius);
-      } catch (error: any) {
-        warning = error?.message || warning || 'BBox Overpass query failed';
-        debug.fallbackError = warning;
-        console.error('Facility bbox fallback failed:', warning);
-      }
-    }
+    const seen = new Set<string>();
 
-    debug.facilityCount = unique.length;
-    console.log('Facility fetch result:', debug);
+    const unique = facilities.filter((f: any) => {
+      const key = f.osmId
+        ? `${f.osmType}-${f.osmId}`
+        : `${Number(f.lat).toFixed(5)},${Number(f.lon).toFixed(5)},${f.type},${f.name}`;
+
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    unique.sort((a: any, b: any) => Number(a.distanceKm) - Number(b.distanceKm));
+
+    const debug = {
+      version: VERSION,
+      lat,
+      lon,
+      radius,
+      rawElementCount: rawElements.length,
+      facilityCount: unique.length,
+      warning,
+      firstRawElement: rawElements[0] || null,
+      firstFacility: unique[0] || null,
+    };
+
+    console.log('Facility API debug:', debug);
 
     return res.status(200).json({
       success: true,
       data: {
-        facilities: unique.slice(0, 500),
+        facilities: unique.slice(0, 300),
         radiusUsed: radius,
         source: 'OpenStreetMap Overpass',
-        warning: unique.length === 0 ? warning || 'No OSM healthcare features returned for this query' : undefined,
+        warning: unique.length === 0 ? warning || 'No node-based OSM healthcare facilities returned' : undefined,
         debug,
       },
     });
   } catch (error: any) {
-    console.error('Facility API crashed:', error?.message || error);
-
     return res.status(200).json({
       success: true,
       data: {
@@ -299,7 +244,10 @@ const handler: Handler = async (req, res) => {
         radiusUsed: null,
         source: 'OpenStreetMap Overpass',
         warning: error?.message || 'Facility fetch failed safely',
-        debug: { crashed: true },
+        debug: {
+          version: VERSION,
+          crashed: true,
+        },
       },
     });
   }
