@@ -68,6 +68,9 @@ export function AnalyticsPanel() {
         {state.activeTab === 'settings' && <StickyAnalyzeButton />}
 
         <div className="border-t border-border px-4 py-3 text-center">
+          <p className="text-[10px] text-muted-foreground leading-relaxed mb-2">
+            This tool does not store user location, analysis results, or personal data. All analysis is processed temporarily for map display and export.
+          </p>
           <a
             href="https://hasibulahmedpulok.vercel.app/"
             target="_blank"
