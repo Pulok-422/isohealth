@@ -76,7 +76,6 @@ const initialState: State = {
   showPopulation: false,
   showUnderserved: false,
   simulationMode: false,
-  populationSource: 'worldpop',
   facilities: [],
   simulatedFacilities: [],
   analysisResult: null,
