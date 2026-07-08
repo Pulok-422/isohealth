@@ -1,25 +1,11 @@
 import {
   MapPin,
-  LogIn,
-  User,
-  LayoutDashboard,
-  Shield,
-  LogOut,
   Search,
   RotateCcw,
   Loader2,
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 import { useAppState } from '@/context/AppContext';
-import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-} from '@/components/ui/dropdown-menu';
 import { useCallback, useMemo, useRef, useState, useEffect } from 'react';
 import { toast } from 'sonner';
 
@@ -74,8 +60,6 @@ function pickReadableAreaName(data: ReverseGeocodeResult | null) {
 
 export function TopBar() {
   const { state, dispatch } = useAppState();
-  const { user, signOut, isAdmin } = useAuth();
-  const navigate = useNavigate();
 
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -353,52 +337,6 @@ export function TopBar() {
           >
             <RotateCcw className="w-4 h-4" />
           </Button>
-
-          {user ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  size="sm"
-                  className="h-9 px-3 rounded-lg bg-secondary text-secondary-foreground hover:bg-secondary/80 border border-border shadow-none gap-2"
-                >
-                  <User className="w-4 h-4" />
-                  <span className="hidden md:inline max-w-[100px] truncate">
-                    {user.email?.split('@')[0]}
-                  </span>
-                </Button>
-              </DropdownMenuTrigger>
-
-              <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuItem onClick={() => navigate('/dashboard')}>
-                  <LayoutDashboard className="w-4 h-4 mr-2" />
-                  Dashboard
-                </DropdownMenuItem>
-
-                {isAdmin && (
-                  <DropdownMenuItem onClick={() => navigate('/admin')}>
-                    <Shield className="w-4 h-4 mr-2" />
-                    Admin Panel
-                  </DropdownMenuItem>
-                )}
-
-                <DropdownMenuSeparator />
-
-                <DropdownMenuItem onClick={signOut}>
-                  <LogOut className="w-4 h-4 mr-2" />
-                  Sign Out
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : (
-            <Button
-              size="sm"
-              onClick={() => navigate('/auth')}
-              className="h-9 px-3 rounded-lg bg-secondary text-secondary-foreground hover:bg-secondary/80 border border-border shadow-none gap-1.5"
-            >
-              <LogIn className="w-4 h-4" />
-              <span className="hidden md:inline">Sign In</span>
-            </Button>
-          )}
         </div>
       </div>
     </header>
