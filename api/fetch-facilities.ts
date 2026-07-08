@@ -18,13 +18,12 @@ type RawElement = {
 const OVERPASS_ENDPOINTS = [
   'https://overpass-api.de/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass.openstreetmap.ru/api/interpreter',
 ];
 
 function clampRadius(radius: unknown) {
   const parsed = Number(radius);
   if (!Number.isFinite(parsed)) return 8000;
-
-  // Keep below 10 km for Vercel Hobby. Large Dhaka queries can time out.
   return Math.min(Math.max(parsed, 1000), 10000);
 }
 
@@ -55,11 +54,31 @@ function bboxFromRadius(lat: number, lon: number, radiusMeters: number) {
   };
 }
 
-function buildFastQuery(lat: number, lon: number, radius: number) {
+function buildMainQuery(lat: number, lon: number, radius: number) {
+  return `
+[out:json][timeout:8];
+(
+  node["amenity"~"^(hospital|clinic|pharmacy|doctors|dentist)$"](around:${radius},${lat},${lon});
+  way["amenity"~"^(hospital|clinic|pharmacy|doctors|dentist)$"](around:${radius},${lat},${lon});
+  relation["amenity"~"^(hospital|clinic|pharmacy|doctors|dentist)$"](around:${radius},${lat},${lon});
+
+  node["healthcare"](around:${radius},${lat},${lon});
+  way["healthcare"](around:${radius},${lat},${lon});
+  relation["healthcare"](around:${radius},${lat},${lon});
+
+  node["name"~"hospital|clinic|pharmacy|medical|diagnostic|doctor|health|care|হাসপাতাল|ক্লিনিক|ফার্মেসি|ডায়াগনস্টিক|ডায়াগনস্টিক|মেডিকেল|ডাক্তার|স্বাস্থ্য",i](around:${radius},${lat},${lon});
+  way["name"~"hospital|clinic|pharmacy|medical|diagnostic|doctor|health|care|হাসপাতাল|ক্লিনিক|ফার্মেসি|ডায়াগনস্টিক|ডায়াগনস্টিক|মেডিকেল|ডাক্তার|স্বাস্থ্য",i](around:${radius},${lat},${lon});
+  relation["name"~"hospital|clinic|pharmacy|medical|diagnostic|doctor|health|care|হাসপাতাল|ক্লিনিক|ফার্মেসি|ডায়াগনস্টিক|ডায়াগনস্টিক|মেডিকেল|ডাক্তার|স্বাস্থ্য",i](around:${radius},${lat},${lon});
+);
+out body center 800;
+`;
+}
+
+function buildBBoxFallbackQuery(lat: number, lon: number, radius: number) {
   const b = bboxFromRadius(lat, lon, radius);
 
   return `
-[out:json][timeout:6];
+[out:json][timeout:8];
 (
   node["amenity"~"^(hospital|clinic|pharmacy|doctors|dentist)$"](${b.south},${b.west},${b.north},${b.east});
   way["amenity"~"^(hospital|clinic|pharmacy|doctors|dentist)$"](${b.south},${b.west},${b.north},${b.east});
@@ -73,19 +92,7 @@ function buildFastQuery(lat: number, lon: number, radius: number) {
   way["name"~"hospital|clinic|pharmacy|medical|diagnostic|doctor|health|care|হাসপাতাল|ক্লিনিক|ফার্মেসি|ডায়াগনস্টিক|ডায়াগনস্টিক|মেডিকেল|ডাক্তার|স্বাস্থ্য",i](${b.south},${b.west},${b.north},${b.east});
   relation["name"~"hospital|clinic|pharmacy|medical|diagnostic|doctor|health|care|হাসপাতাল|ক্লিনিক|ফার্মেসি|ডায়াগনস্টিক|ডায়াগনস্টিক|মেডিকেল|ডাক্তার|স্বাস্থ্য",i](${b.south},${b.west},${b.north},${b.east});
 );
-out tags center 800;
-`;
-}
-
-function buildNodeOnlyFallbackQuery(lat: number, lon: number, radius: number) {
-  return `
-[out:json][timeout:5];
-(
-  node["amenity"~"^(hospital|clinic|pharmacy|doctors|dentist)$"](around:${radius},${lat},${lon});
-  node["healthcare"](around:${radius},${lat},${lon});
-  node["name"~"hospital|clinic|pharmacy|medical|diagnostic|doctor|health|care|হাসপাতাল|ক্লিনিক|ফার্মেসি|ডায়াগনস্টিক|ডায়াগনস্টিক|মেডিকেল|ডাক্তার|স্বাস্থ্য",i](around:${radius},${lat},${lon});
-);
-out tags 500;
+out body center 800;
 `;
 }
 
@@ -123,7 +130,11 @@ function normaliseFacility(el: RawElement, originLat: number, originLon: number)
     /clinic|diagnostic|medical|health centre|ক্লিনিক|ডায়াগনস্টিক|ডায়াগনস্টিক|মেডিকেল/i.test(name)
   ) {
     type = 'clinic';
-  } else if (amenity === 'pharmacy' || healthcare === 'pharmacy' || /pharmacy|drug|ফার্মেসি/i.test(name)) {
+  } else if (
+    amenity === 'pharmacy' ||
+    healthcare === 'pharmacy' ||
+    /pharmacy|drug|ফার্মেসি/i.test(name)
+  ) {
     type = 'pharmacy';
   } else if (
     amenity === 'doctors' ||
@@ -175,7 +186,7 @@ async function queryOneEndpoint(endpoint: string, query: string, timeoutMs: numb
   }
 }
 
-async function queryOverpass(query: string, timeoutMs = 6500) {
+async function queryOverpass(query: string, timeoutMs = 8500) {
   let lastError = '';
 
   for (const endpoint of OVERPASS_ENDPOINTS) {
@@ -234,34 +245,34 @@ const handler: Handler = async (req, res) => {
     }
 
     const radius = clampRadius(body.radius);
-    const debug: Record<string, any> = { lat, lon, radius, strategy: 'bbox' };
+    const debug: Record<string, any> = { lat, lon, radius, strategy: 'around-body-center' };
 
     let rawElements: RawElement[] = [];
     let warning = '';
 
     try {
-      const raw = await queryOverpass(buildFastQuery(lat, lon, radius), 6500);
+      const raw = await queryOverpass(buildMainQuery(lat, lon, radius), 8500);
       rawElements = raw?.elements || [];
       debug.rawElementCount = rawElements.length;
     } catch (error: any) {
-      warning = error?.message || 'BBox Overpass query failed';
-      debug.bboxError = warning;
-      console.error('Facility bbox query failed:', warning);
+      warning = error?.message || 'Around Overpass query failed';
+      debug.aroundError = warning;
+      console.error('Facility around query failed:', warning);
     }
 
     let unique = uniqueFacilities(rawElements, lat, lon, radius);
 
     if (unique.length === 0) {
       try {
-        debug.strategy = 'node-only-fallback';
-        const raw = await queryOverpass(buildNodeOnlyFallbackQuery(lat, lon, Math.min(radius, 8000)), 5500);
-        rawElements = raw?.elements || [];
-        debug.fallbackRawElementCount = rawElements.length;
-        unique = uniqueFacilities(rawElements, lat, lon, Math.min(radius, 8000));
+        debug.strategy = 'bbox-body-center-fallback';
+        const raw = await queryOverpass(buildBBoxFallbackQuery(lat, lon, radius), 8500);
+        const fallbackElements = raw?.elements || [];
+        debug.fallbackRawElementCount = fallbackElements.length;
+        unique = uniqueFacilities(fallbackElements, lat, lon, radius);
       } catch (error: any) {
-        warning = error?.message || warning || 'Node-only Overpass query failed';
+        warning = error?.message || warning || 'BBox Overpass query failed';
         debug.fallbackError = warning;
-        console.error('Facility node fallback failed:', warning);
+        console.error('Facility bbox fallback failed:', warning);
       }
     }
 
