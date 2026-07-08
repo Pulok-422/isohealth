@@ -4,9 +4,20 @@ export const config = {
   maxDuration: 10,
 };
 
-const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
-
 type FacilityType = 'hospital' | 'clinic' | 'pharmacy' | 'doctors' | 'healthcare';
+
+const OVERPASS_ENDPOINTS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+];
+
+function clampRadius(radius: unknown) {
+  const parsed = Number(radius);
+  if (!Number.isFinite(parsed)) return 7000;
+
+  // Keep this small enough for Vercel Hobby.
+  return Math.min(Math.max(parsed, 1000), 10000);
+}
 
 function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
   const R = 6371;
@@ -22,42 +33,33 @@ function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-function clampRadius(radius: unknown) {
-  const parsed = Number(radius);
-  if (!Number.isFinite(parsed)) return 7000;
-
-  // Keep it smaller to avoid Vercel 504.
-  return Math.min(Math.max(parsed, 1000), 8000);
-}
-
-function bboxFromRadius(lat: number, lon: number, radiusMeters: number) {
-  const radiusKm = radiusMeters / 1000;
-  const latDelta = radiusKm / 111;
-  const lonDelta = radiusKm / (111 * Math.cos((lat * Math.PI) / 180));
-
-  return {
-    south: lat - latDelta,
-    west: lon - lonDelta,
-    north: lat + latDelta,
-    east: lon + lonDelta,
-  };
-}
-
-function buildFastQuery(lat: number, lon: number, radiusMeters: number) {
-  const b = bboxFromRadius(lat, lon, radiusMeters);
-
-  // BBOX query is much faster than large around queries.
-  // Limit output to prevent Vercel timeout.
+function buildQuery(lat: number, lon: number, radius: number) {
   return `
-[out:json][timeout:6];
+[out:json][timeout:8];
 (
-  node["amenity"~"^(hospital|clinic|pharmacy|doctors)$"](${b.south},${b.west},${b.north},${b.east});
-  node["healthcare"~"^(hospital|clinic|pharmacy|doctor|doctors|centre|health_post|community_health_worker)$"](${b.south},${b.west},${b.north},${b.east});
+  node["amenity"="hospital"](around:${radius},${lat},${lon});
+  node["amenity"="clinic"](around:${radius},${lat},${lon});
+  node["amenity"="pharmacy"](around:${radius},${lat},${lon});
+  node["amenity"="doctors"](around:${radius},${lat},${lon});
 
-  way["amenity"~"^(hospital|clinic|pharmacy|doctors)$"](${b.south},${b.west},${b.north},${b.east});
-  way["healthcare"~"^(hospital|clinic|pharmacy|doctor|doctors|centre|health_post|community_health_worker)$"](${b.south},${b.west},${b.north},${b.east});
+  way["amenity"="hospital"](around:${radius},${lat},${lon});
+  way["amenity"="clinic"](around:${radius},${lat},${lon});
+  way["amenity"="pharmacy"](around:${radius},${lat},${lon});
+  way["amenity"="doctors"](around:${radius},${lat},${lon});
+
+  relation["amenity"="hospital"](around:${radius},${lat},${lon});
+  relation["amenity"="clinic"](around:${radius},${lat},${lon});
+  relation["amenity"="pharmacy"](around:${radius},${lat},${lon});
+  relation["amenity"="doctors"](around:${radius},${lat},${lon});
+
+  node["healthcare"](around:${radius},${lat},${lon});
+  way["healthcare"](around:${radius},${lat},${lon});
+  relation["healthcare"](around:${radius},${lat},${lon});
+
+  node["name"~"hospital|clinic|pharmacy|medical|diagnostic|health",i](around:${radius},${lat},${lon});
+  way["name"~"hospital|clinic|pharmacy|medical|diagnostic|health",i](around:${radius},${lat},${lon});
 );
-out center tags 250;
+out center 300;
 `;
 }
 
@@ -66,24 +68,32 @@ function normaliseFacility(el: any, originLat: number, originLon: number) {
   const facilityLon = el.lon ?? el.center?.lon;
   const tags = el.tags || {};
 
-  if (typeof facilityLat !== 'number' || typeof facilityLon !== 'number') return null;
+  if (typeof facilityLat !== 'number' || typeof facilityLon !== 'number') {
+    return null;
+  }
 
   const amenity = String(tags.amenity || '').toLowerCase();
   const healthcare = String(tags.healthcare || '').toLowerCase();
-  const name = String(tags.name || tags['name:en'] || tags.brand || '').trim();
+  const name = String(tags.name || tags['name:en'] || tags.brand || tags.operator || '').trim();
 
   let type: FacilityType = 'healthcare';
 
-  if (amenity === 'hospital' || healthcare === 'hospital') {
+  if (amenity === 'hospital' || healthcare === 'hospital' || /hospital/i.test(name)) {
     type = 'hospital';
-  } else if (amenity === 'clinic' || healthcare === 'clinic' || healthcare === 'centre') {
+  } else if (
+    amenity === 'clinic' ||
+    healthcare === 'clinic' ||
+    healthcare === 'centre' ||
+    /clinic|diagnostic|medical|health centre/i.test(name)
+  ) {
     type = 'clinic';
-  } else if (amenity === 'pharmacy' || healthcare === 'pharmacy') {
+  } else if (amenity === 'pharmacy' || healthcare === 'pharmacy' || /pharmacy|drug/i.test(name)) {
     type = 'pharmacy';
   } else if (
     amenity === 'doctors' ||
     healthcare === 'doctor' ||
-    healthcare === 'doctors'
+    healthcare === 'doctors' ||
+    /doctor|physician/i.test(name)
   ) {
     type = 'doctors';
   }
@@ -107,30 +117,41 @@ function normaliseFacility(el: any, originLat: number, originLon: number) {
   };
 }
 
-async function fetchOverpass(query: string) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 7500);
+async function queryOverpass(query: string) {
+  let lastError = '';
 
-  try {
-    const response = await fetch(OVERPASS_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
-      },
-      body: `data=${encodeURIComponent(query)}`,
-      signal: controller.signal,
-    });
+  for (const endpoint of OVERPASS_ENDPOINTS) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8500);
 
-    const text = await response.text();
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+        },
+        body: `data=${encodeURIComponent(query)}`,
+        signal: controller.signal,
+      });
 
-    if (!response.ok) {
-      throw new Error(`Overpass returned ${response.status}: ${text.slice(0, 120)}`);
+      const text = await response.text();
+
+      if (!response.ok) {
+        lastError = `Overpass ${response.status}: ${text.slice(0, 180)}`;
+        console.error(lastError);
+        continue;
+      }
+
+      return JSON.parse(text);
+    } catch (error: any) {
+      lastError = error?.message || 'Overpass request failed';
+      console.error('Overpass endpoint failed:', endpoint, lastError);
+    } finally {
+      clearTimeout(timer);
     }
-
-    return JSON.parse(text);
-  } finally {
-    clearTimeout(timer);
   }
+
+  throw new Error(lastError || 'All Overpass endpoints failed');
 }
 
 const handler: Handler = async (req, res) => {
@@ -164,28 +185,33 @@ const handler: Handler = async (req, res) => {
     }
 
     const radius = clampRadius(body.radius);
+    const query = buildQuery(lat, lon, radius);
+
+    console.log('Facility query input:', { lat, lon, radius });
 
     let raw: any;
 
     try {
-      raw = await fetchOverpass(buildFastQuery(lat, lon, radius));
+      raw = await queryOverpass(query);
     } catch (error: any) {
-      console.error('Overpass failed:', error?.message || error);
+      console.error('Facility Overpass failed:', error?.message || error);
 
-      // Important: return JSON instead of letting Vercel timeout/crash.
       return res.status(200).json({
         success: true,
         data: {
           facilities: [],
           radiusUsed: radius,
           source: 'OpenStreetMap Overpass',
-          warning:
-            'Facility service is temporarily unavailable or too slow. Isochrone analysis is still available.',
+          warning: error?.message || 'Overpass failed',
         },
       });
     }
 
-    const facilities = (raw.elements || [])
+    const rawElements = raw?.elements || [];
+
+    console.log('Raw Overpass elements:', rawElements.length);
+
+    const facilities = rawElements
       .map((el: any) => normaliseFacility(el, lat, lon))
       .filter(Boolean)
       .filter((f: any) => f.distanceKm * 1000 <= radius);
@@ -204,19 +230,20 @@ const handler: Handler = async (req, res) => {
 
     unique.sort((a: any, b: any) => a.distanceKm - b.distanceKm);
 
-    console.log('Overpass facilities found:', unique.length, 'radius:', radius);
+    console.log('Normalised facilities:', unique.length);
 
     return res.status(200).json({
       success: true,
       data: {
-        facilities: unique.slice(0, 250),
+        facilities: unique.slice(0, 300),
         radiusUsed: radius,
         source: 'OpenStreetMap Overpass',
         debug: {
           lat,
           lon,
           radius,
-          count: unique.length,
+          rawElementCount: rawElements.length,
+          facilityCount: unique.length,
         },
       },
     });
@@ -229,7 +256,7 @@ const handler: Handler = async (req, res) => {
         facilities: [],
         radiusUsed: null,
         source: 'OpenStreetMap Overpass',
-        warning: 'Facility fetch failed safely. Isochrone analysis is still available.',
+        warning: error?.message || 'Facility fetch failed safely',
       },
     });
   }
