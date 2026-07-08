@@ -38,8 +38,14 @@ export async function fetchFacilities(
   lon: number,
   radius: number = 10000
 ): Promise<Facility[]> {
-  const data = await postJson<{ facilities: Facility[] }>('/api/fetch-facilities', { lat, lon, radius });
-  return data.facilities ?? [];
+  const data = await postJson<{ facilities: Facility[]; radiusUsed?: number; source?: string }>(
+    '/api/fetch-facilities',
+    { lat, lon, radius }
+  );
+
+  const facilities = data.facilities ?? [];
+  console.log('Fetched facilities:', facilities.length, facilities, { radiusUsed: data.radiusUsed });
+  return facilities;
 }
 
 export async function generateIsochrones(
