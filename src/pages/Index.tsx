@@ -2,11 +2,8 @@ import { AppProvider } from '@/context/AppContext';
 import { TopBar } from '@/components/TopBar';
 import { HealthMap } from '@/components/HealthMap';
 import { AnalyticsPanel } from '@/components/AnalyticsPanel';
-import { useVisitorTracking } from '@/hooks/useVisitorTracking';
 
 function IndexContent() {
-  useVisitorTracking();
-
   return (
     <div className="h-screen flex flex-col overflow-hidden">
       <TopBar />

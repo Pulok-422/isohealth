@@ -1,26 +1,55 @@
-import { supabase } from '@/integrations/supabase/client';
 import type { Facility, TransportProfile } from '@/types/health';
 
-export async function fetchFacilities(lat: number, lon: number, radius: number = 10000): Promise<Facility[]> {
-  const { data, error } = await supabase.functions.invoke('fetch-facilities', {
-    body: { lat, lon, radius },
-  });
-  if (error) throw new Error(error.message);
-  return data.facilities || [];
+type SuccessEnvelope<T> = { success: true; data: T };
+type ErrorEnvelope = { success: false; error: string };
+type Envelope<T> = SuccessEnvelope<T> | ErrorEnvelope;
+
+async function postJson<T>(path: string, body: unknown): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new Error(`Network error while calling ${path}`);
+  }
+
+  let payload: Envelope<T> | null = null;
+  try {
+    payload = (await response.json()) as Envelope<T>;
+  } catch {
+    // non-JSON response
+  }
+
+  if (!response.ok || !payload || payload.success !== true) {
+    const message =
+      (payload && 'error' in payload && payload.error) ||
+      `Request failed (${response.status})`;
+    throw new Error(message);
+  }
+
+  return payload.data;
+}
+
+export async function fetchFacilities(
+  lat: number,
+  lon: number,
+  radius: number = 10000
+): Promise<Facility[]> {
+  const data = await postJson<{ facilities: Facility[] }>('/api/fetch-facilities', { lat, lon, radius });
+  return data.facilities ?? [];
 }
 
 export async function generateIsochrones(
   lat: number,
   lon: number,
   profile: TransportProfile = 'foot-walking',
-  ranges: number[] = [600, 1200, 1800, 2400, 3000, 3600],
+  ranges: number[] = [300, 600, 900, 1800],
   range_type: 'time' | 'distance' = 'time'
 ) {
-  const { data, error } = await supabase.functions.invoke('generate-isochrones', {
-    body: { lat, lon, profile, ranges, range_type },
-  });
-  if (error) throw new Error(error.message);
-  return data;
+  return postJson<any>('/api/generate-isochrones', { lat, lon, profile, ranges, range_type });
 }
 
 export async function calculateRoute(
@@ -28,11 +57,7 @@ export async function calculateRoute(
   end: { lat: number; lon: number },
   profile: TransportProfile = 'driving-car'
 ) {
-  const { data, error } = await supabase.functions.invoke('calculate-route', {
-    body: { start, end, profile },
-  });
-  if (error) throw new Error(error.message);
-  return data;
+  return postJson<any>('/api/calculate-route', { start, end, profile });
 }
 
 export async function computeMatrix(
@@ -40,9 +65,5 @@ export async function computeMatrix(
   destinations: { lat: number; lon: number }[],
   profile: TransportProfile = 'driving-car'
 ) {
-  const { data, error } = await supabase.functions.invoke('compute-matrix', {
-    body: { origins, destinations, profile },
-  });
-  if (error) throw new Error(error.message);
-  return data;
+  return postJson<any>('/api/compute-matrix', { origins, destinations, profile });
 }
