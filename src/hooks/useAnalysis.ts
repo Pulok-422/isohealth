@@ -7,11 +7,8 @@ import {
   findUnderservedClusters,
   suggestFacilityLocations,
   haversine,
+  generatePopulationGrid,
 } from '@/lib/analysis';
-import { getBBoxFromIsochrones, getPopulationEstimate } from '@/lib/population';
-import type { PopulationSource } from '@/lib/population';
-import { supabase } from '@/integrations/supabase/client';
-import { getVisitorId } from '@/lib/visitor';
 import { toast } from 'sonner';
 
 const cache = new Map<string, { data: any; ts: number }>();
@@ -122,25 +119,38 @@ export function useAnalysis() {
 
         const promises: Promise<any>[] = [];
 
-        if (!facilities) {
-          promises.push(
-            fetchFacilities(lat, lon, state.searchRadius).then((f) => {
-              facilities = f;
-              setCache(facKey, f);
-            })
-          );
-        }
-
-        if (!isochrones) {
-          promises.push(
-            generateIsochrones(lat, lon, transportProfile, ranges, rangeType).then((i) => {
-              isochrones = i;
+        // Prioritize isochrones; fetch facilities in parallel but don't let
+        // a facility failure block map rendering.
+        const isoPromise = isochrones
+          ? Promise.resolve(isochrones)
+          : generateIsochrones(lat, lon, transportProfile, ranges, rangeType).then((i) => {
               setCache(isoKey, i);
-            })
-          );
-        }
+              return i;
+            });
 
-        if (promises.length) await Promise.all(promises);
+        const facPromise = facilities
+          ? Promise.resolve(facilities)
+          : fetchFacilities(lat, lon, state.searchRadius).then((f) => {
+              setCache(facKey, f);
+              return f;
+            });
+
+        const [isoSettled, facSettled] = await Promise.allSettled([isoPromise, facPromise]);
+
+        if (isoSettled.status === 'rejected') {
+          throw isoSettled.reason instanceof Error
+            ? isoSettled.reason
+            : new Error(String(isoSettled.reason));
+        }
+        isochrones = isoSettled.value;
+
+        if (facSettled.status === 'fulfilled') {
+          facilities = facSettled.value;
+        } else {
+          facilities = [];
+          console.warn('Facility fetch failed:', facSettled.reason);
+          toast.warning('Facility data unavailable — showing isochrone only');
+        }
 
         console.log('Analysis profile used:', transportProfile);
         console.log('Analysis type used:', rangeType);
@@ -156,43 +166,11 @@ export function useAnalysis() {
 
         dispatch({ type: 'SET_FACILITIES', payload: facilities });
 
-        const bbox = getBBoxFromIsochrones(isochrones);
-        let populationCovered = 0;
-        let populationUnderserved = 0;
-        let totalPopulation = 0;
-        let popGrid: import('@/types/health').PopulationPoint[] = [];
-        let populationSource: PopulationSource = 'worldpop';
-        let populationMethod = '';
-
-        if (bbox) {
-          try {
-            const popEstimate = await getPopulationEstimate(bbox, isochrones);
-            populationCovered = popEstimate.population_with_access;
-            populationUnderserved = popEstimate.population_without_access;
-            totalPopulation = popEstimate.total_population_estimate;
-            popGrid = popEstimate.population_grid || [];
-            populationSource = 'worldpop';
-            populationMethod = popEstimate.method;
-            console.log('Population estimate:', popEstimate);
-          } catch (err) {
-            console.warn('Population estimation failed, using local fallback:', err);
-            const { generatePopulationGrid } = await import('@/lib/analysis');
-            popGrid = generatePopulationGrid(lat, lon);
-            const coverage = calculateCoverage(popGrid, isochrones);
-            populationCovered = coverage.covered;
-            populationUnderserved = coverage.underserved;
-            totalPopulation = coverage.total;
-            populationSource = 'simulated';
-          }
-        } else {
-          const { generatePopulationGrid } = await import('@/lib/analysis');
-          popGrid = generatePopulationGrid(lat, lon);
-          const coverage = calculateCoverage(popGrid, isochrones);
-          populationCovered = coverage.covered;
-          populationUnderserved = coverage.underserved;
-          totalPopulation = coverage.total;
-          populationSource = 'simulated';
-        }
+        const popGrid = generatePopulationGrid(lat, lon);
+        const coverage = calculateCoverage(popGrid, isochrones);
+        const populationCovered = coverage.covered;
+        const populationUnderserved = coverage.underserved;
+        const totalPopulation = coverage.total;
 
         dispatch({ type: 'SET_POPULATION', payload: popGrid });
 
@@ -237,8 +215,6 @@ export function useAnalysis() {
             profileUsed: transportProfile,
             analysisTypeUsed: rangeType,
             rangesUsed: ranges,
-            populationSource,
-            populationMethod,
           },
         });
 
@@ -246,30 +222,19 @@ export function useAnalysis() {
         const suggestions = suggestFacilityLocations(underserved);
         dispatch({ type: 'SET_OPTIMIZATION', payload: suggestions });
 
-        const visitorId = getVisitorId();
-        supabase.auth.getUser().then(({ data: { user } }) => {
-          supabase
-            .from('isochrone_requests')
-            .insert({
-              user_id: user?.id || null,
-              visitor_id: visitorId,
-              latitude: lat,
-              longitude: lon,
-              profile: transportProfile,
-              ranges: ranges as any,
-              request_type: rangeType,
-            })
-            .then(() => {});
-        });
-
         toast.success(
           reachableFacilities.length > 0
             ? `Found ${reachableFacilities.length} healthcare facilities within reach`
             : 'No health facilities found nearby — try expanding the range'
         );
-      } catch (error: any) {
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
         console.error('Analysis error:', error);
-        toast.error(error.message?.includes('fetch') ? 'Network error — please check your connection' : `Analysis failed: ${error.message}`);
+        toast.error(
+          message.toLowerCase().includes('network') || message.toLowerCase().includes('fetch')
+            ? 'Network error — please check your connection'
+            : `Analysis failed: ${message}`
+        );
       } finally {
         dispatch({ type: 'SET_ANALYZING', payload: false });
       }
