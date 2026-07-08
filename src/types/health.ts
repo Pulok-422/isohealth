@@ -1,5 +1,5 @@
 export interface Facility {
-  id: number;
+  id: number | string;
   name: string;
   type: 'hospital' | 'clinic' | 'pharmacy' | 'doctors' | 'healthcare';
   lat: number;
