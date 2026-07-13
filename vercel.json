@@ -2,7 +2,24 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "functions": {
+    "api/fetch-facilities.ts": {
+      "maxDuration": 60
+    },
+    "api/overpass-health.ts": {
+      "maxDuration": 30
+    },
+    "api/generate-isochrones.ts": {
+      "maxDuration": 30
+    },
+    "api/compute-matrix.ts": {
+      "maxDuration": 30
+    }
+  },
   "rewrites": [
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
+    }
   ]
 }
