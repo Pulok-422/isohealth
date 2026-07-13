@@ -3,18 +3,12 @@ import { useAppState } from '@/context/AppContext';
 import { AnalysisSettings, StickyAnalyzeButton } from './AnalysisSettings';
 import { SummaryTab } from './panels/SummaryTab';
 import { FacilitiesTab } from './panels/FacilitiesTab';
-import { SimulationTab } from './panels/SimulationTab';
-import { OptimizationTab } from './panels/OptimizationTab';
 import { ExportTab } from './panels/ExportTab';
-import { PresetsPanel } from './panels/PresetsPanel';
 
 const tabs = [
   { id: 'settings', label: 'Settings' },
-  { id: 'presets', label: 'Presets' },
   { id: 'summary', label: 'Summary' },
   { id: 'facilities', label: 'Facilities' },
-  { id: 'simulation', label: 'Simulation' },
-  { id: 'optimization', label: 'Optimize' },
   { id: 'export', label: 'Export' },
 ];
 
@@ -55,11 +49,8 @@ export function AnalyticsPanel() {
               className="h-full"
             >
               {state.activeTab === 'settings' && <AnalysisSettings />}
-              {state.activeTab === 'presets' && <PresetsPanel />}
               {state.activeTab === 'summary' && <SummaryTab />}
               {state.activeTab === 'facilities' && <FacilitiesTab />}
-              {state.activeTab === 'simulation' && <SimulationTab />}
-              {state.activeTab === 'optimization' && <OptimizationTab />}
               {state.activeTab === 'export' && <ExportTab />}
             </motion.div>
           </AnimatePresence>

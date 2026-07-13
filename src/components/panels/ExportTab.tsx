@@ -1,10 +1,42 @@
 import { useState } from 'react';
 import { useAppState } from '@/context/AppContext';
-import { Download, FileSpreadsheet, FileJson, Link2, Image, Copy, Check } from 'lucide-react';
+import { Download, FileSpreadsheet, FileJson, Link2, Copy, Check, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
+import { ROUTING_PROVIDER_LABEL } from '@/services/routing';
+import type { Facility } from '@/types/health';
+
+function facilityRow(f: Facility, originLat: number, originLon: number, analysisId: string, analysisDate: string, originLabel: string) {
+  return {
+    'Analysis ID': analysisId,
+    'Analysis Date': analysisDate,
+    'Origin Latitude': originLat,
+    'Origin Longitude': originLon,
+    'Origin Label': originLabel,
+    'Facility ID': f.id,
+    'Facility Name': f.name,
+    'Facility Type': f.type,
+    'Facility Source': f.source,
+    'Source Dataset': f.sourceDataset ?? '',
+    'OSM Type': f.osmType ?? '',
+    'OSM ID': f.osmId ?? '',
+    Latitude: f.lat,
+    Longitude: f.lon,
+    'Minimum Travel Band': f.minimumBandLabel ?? '',
+    'Minimum Band Value': f.minimumBandValue ?? '',
+    'Straight-line Distance (m)': Math.round(f.straightLineDistanceMeters),
+    'Road Distance (m)': f.travelDistanceMeters != null ? Math.round(f.travelDistanceMeters) : '',
+    'Road Travel Time (s)': f.travelDurationSeconds != null ? Math.round(f.travelDurationSeconds) : '',
+    'Matrix Evaluated': f.matrixEvaluated ? 'Yes' : 'No',
+    'Inside Outermost Isochrone': f.insideOutermostIsochrone ? 'Yes' : 'No',
+    Operator: f.operator ?? '',
+    'Opening Hours': f.openingHours ?? '',
+    Emergency: f.emergency ?? '',
+    Speciality: f.speciality ?? '',
+  };
+}
 
 function buildShareUrl(state: any): string {
   const params = new URLSearchParams();
@@ -14,79 +46,139 @@ function buildShareUrl(state: any): string {
   }
   params.set('mode', state.transportProfile);
   params.set('type', state.analysisType);
-  if (state.analysisType === 'time') {
-    params.set('ranges', state.timeThresholds.join(','));
-  } else {
-    params.set('ranges', state.distanceThresholds.join(','));
-  }
+  params.set('ranges', (state.analysisType === 'time' ? state.timeThresholds : state.distanceThresholds).join(','));
   return `${window.location.origin}?${params.toString()}`;
 }
 
 export function ExportTab() {
   const { state } = useAppState();
   const [copied, setCopied] = useState(false);
+  const result = state.analysisResult;
+  const hasData = !!result;
 
   const exportCSV = () => {
-    if (!state.analysisResult) return;
-    const rows = state.analysisResult.facilities.map(f => ({
-      Name: f.name,
-      Type: f.type,
-      Latitude: f.lat,
-      Longitude: f.lon,
-      Simulated: f.isSimulated ? 'Yes' : 'No',
-    }));
-    const header = Object.keys(rows[0] || {}).join(',');
-    const csv = [header, ...rows.map(r => Object.values(r).join(','))].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    saveAs(blob, 'health-facilities.csv');
+    if (!result) return;
+    const rows = result.facilities.map((f) =>
+      facilityRow(f, result.origin.lat, result.origin.lon, result.analysisId, result.analysisDate, result.origin.label ?? ''),
+    );
+    if (!rows.length) {
+      toast.warning('No facilities to export');
+      return;
+    }
+    const header = Object.keys(rows[0]);
+    const csv = [header.join(','), ...rows.map((r) => header.map((h) => JSON.stringify((r as any)[h] ?? '')).join(','))].join('\n');
+    saveAs(new Blob([csv], { type: 'text/csv' }), 'isohealth-facilities.csv');
     toast.success('CSV exported');
   };
 
   const exportExcel = () => {
-    if (!state.analysisResult) return;
-    const facilities = state.analysisResult.facilities.map(f => ({
-      Name: f.name,
-      Type: f.type,
-      Latitude: f.lat,
-      Longitude: f.lon,
-      Simulated: f.isSimulated ? 'Yes' : 'No',
-    }));
-
+    if (!result) return;
     const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(facilities);
-    XLSX.utils.book_append_sheet(wb, ws, 'Facilities');
 
-    const kpis = [
-      { Metric: 'Total Facilities', Value: state.analysisResult.facilities.length },
-      { Metric: 'Population Covered', Value: state.analysisResult.populationCovered },
-      { Metric: 'Population Underserved', Value: state.analysisResult.populationUnderserved },
-      { Metric: 'Coverage %', Value: state.analysisResult.totalPopulation > 0 ? Math.round((state.analysisResult.populationCovered / state.analysisResult.totalPopulation) * 100) : 0 },
+    const facilityRows = result.facilities.map((f) =>
+      facilityRow(f, result.origin.lat, result.origin.lon, result.analysisId, result.analysisDate, result.origin.label ?? ''),
+    );
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(facilityRows), 'Facilities');
+
+    const summary = [
+      { Metric: 'Transport mode', Value: result.profileUsed },
+      { Metric: 'Analysis type', Value: result.analysisTypeUsed },
+      { Metric: 'Selected ranges', Value: result.rangesUsed.join(', ') },
+      { Metric: 'Facility source mode', Value: result.facilitySourceMode },
+      { Metric: 'Reachable facility count', Value: result.facilities.length },
+      { Metric: 'Nearby facility count', Value: result.nearbyFacilities.length },
+      { Metric: 'Distinct facility types', Value: new Set(result.facilities.map((f) => f.type)).size },
+      { Metric: 'Facility query radius (m)', Value: result.facilityQueryRadiusMeters ?? '' },
+      { Metric: 'Routing provider', Value: ROUTING_PROVIDER_LABEL },
+      { Metric: 'Matrix available', Value: result.matrixAvailable ? 'Yes' : 'No' },
+      { Metric: 'Matrix evaluated count', Value: result.matrixCoverage.evaluatedFacilities },
+      { Metric: 'Matrix total count', Value: result.matrixCoverage.totalReachableFacilities },
+      { Metric: 'Matrix coverage complete', Value: result.matrixCoverage.complete ? 'Yes' : 'No' },
+      { Metric: 'Facility result truncated', Value: result.facilityResultTruncated ? 'Yes' : 'No' },
     ];
-    const ws2 = XLSX.utils.json_to_sheet(kpis);
-    XLSX.utils.book_append_sheet(wb, ws2, 'Summary');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summary), 'Summary');
+
+    const bandRows = result.bands.map((b) => ({
+      'Band Label': b.label,
+      'Band Value': b.value,
+      'Incremental Facility Count': result.incrementalCountsByBand[b.label] ?? 0,
+      'Cumulative Facility Count': result.cumulativeCountsByBand[b.label] ?? 0,
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(bandRows), 'Travel Bands');
+
+    const q = result.dataQuality;
+    const qualityRows = Object.entries(q).map(([Metric, Value]) => ({ Metric, Value }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(qualityRows), 'Data Quality');
 
     const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-    saveAs(new Blob([buf]), 'health-analysis.xlsx');
+    saveAs(new Blob([buf]), 'isohealth-analysis.xlsx');
     toast.success('Excel exported');
   };
 
   const exportGeoJSON = () => {
-    if (!state.analysisResult) return;
-    const features: any[] = state.analysisResult.facilities.map(f => ({
+    if (!result) return;
+    const features: any[] = [];
+    features.push({
       type: 'Feature',
-      properties: { name: f.name, type: f.type, simulated: f.isSimulated },
-      geometry: { type: 'Point', coordinates: [f.lon, f.lat] },
-    }));
-
-    // Include isochrone geometries
-    if (state.analysisResult.isochrones?.features) {
-      features.push(...state.analysisResult.isochrones.features);
+      properties: { role: 'origin', label: result.origin.label ?? '' },
+      geometry: { type: 'Point', coordinates: [result.origin.lon, result.origin.lat] },
+    });
+    for (const f of result.facilities) {
+      features.push({
+        type: 'Feature',
+        properties: {
+          name: f.name,
+          facilityType: f.type,
+          source: f.source,
+          sourceDataset: f.sourceDataset ?? null,
+          osmType: f.osmType ?? null,
+          osmId: f.osmId ?? null,
+          minimumBandLabel: f.minimumBandLabel ?? null,
+          minimumBandValue: f.minimumBandValue ?? null,
+          straightLineDistanceMeters: f.straightLineDistanceMeters,
+          travelDistanceMeters: f.travelDistanceMeters ?? null,
+          travelDurationSeconds: f.travelDurationSeconds ?? null,
+          matrixEvaluated: f.matrixEvaluated,
+          operator: f.operator ?? null,
+          openingHours: f.openingHours ?? null,
+          emergency: f.emergency ?? null,
+          speciality: f.speciality ?? null,
+        },
+        geometry: { type: 'Point', coordinates: [f.lon, f.lat] },
+      });
     }
+    if (result.isochrones?.features) features.push(...result.isochrones.features);
+    saveAs(new Blob([JSON.stringify({ type: 'FeatureCollection', features }, null, 2)], { type: 'application/geo+json' }), 'isohealth-analysis.geojson');
+    toast.success('GeoJSON exported');
+  };
 
-    const geojson = { type: 'FeatureCollection', features };
-    const blob = new Blob([JSON.stringify(geojson, null, 2)], { type: 'application/json' });
-    saveAs(blob, 'health-analysis.geojson');
-    toast.success('GeoJSON exported (facilities + isochrones)');
+  const exportMethodology = () => {
+    if (!result) return;
+    const doc = {
+      analysisId: result.analysisId,
+      analysisDate: result.analysisDate,
+      origin: result.origin,
+      transportProfile: result.profileUsed,
+      analysisType: result.analysisTypeUsed,
+      ranges: result.rangesUsed,
+      routingProvider: ROUTING_PROVIDER_LABEL,
+      facilitySourceMode: result.facilitySourceMode,
+      facilityQueryRadiusMeters: result.facilityQueryRadiusMeters,
+      facilityTagsQueried: [
+        'amenity=hospital', 'amenity=clinic', 'amenity=pharmacy', 'amenity=doctors', 'amenity=dentist',
+        'healthcare=hospital', 'healthcare=clinic', 'healthcare=pharmacy', 'healthcare=doctor',
+        'healthcare=doctors', 'healthcare=centre', 'healthcare=health_centre', 'healthcare=dentist',
+        'healthcare=laboratory',
+      ],
+      matrixCoverage: result.matrixCoverage,
+      limitations: [
+        'Facility coverage depends on OpenStreetMap completeness.',
+        'Matrix limited to the nearest 250 facilities per analysis.',
+        'Road-network metrics unavailable when the routing service is offline.',
+      ],
+    };
+    saveAs(new Blob([JSON.stringify(doc, null, 2)], { type: 'application/json' }), 'isohealth-methodology.json');
+    toast.success('Methodology exported');
   };
 
   const copyShareLink = async () => {
@@ -94,102 +186,43 @@ export function ExportTab() {
     try {
       await navigator.clipboard.writeText(url);
       setCopied(true);
-      toast.success('Share link copied to clipboard');
+      toast.success('Share link copied');
       setTimeout(() => setCopied(false), 2000);
     } catch {
       toast.error('Failed to copy link');
     }
   };
 
-  const downloadMapPNG = async () => {
-    try {
-      const { toPng } = await import('html-to-image');
-      const mapEl = document.querySelector('.leaflet-container') as HTMLElement;
-      if (!mapEl) { toast.error('Map not found'); return; }
-
-      toast.info('Capturing map...');
-      const dataUrl = await toPng(mapEl, { quality: 0.95, backgroundColor: '#fff' });
-      const link = document.createElement('a');
-      link.download = 'isohealth-map.png';
-      link.href = dataUrl;
-      link.click();
-      toast.success('Map image downloaded');
-    } catch {
-      toast.error('Failed to capture map');
-    }
-  };
-
-  const hasData = !!state.analysisResult;
-
   return (
     <div className="space-y-3 p-3">
-      {/* Share */}
       <div className="data-card">
-        <span className="kpi-label">Share & Export</span>
-        <p className="text-xs text-muted-foreground mt-1">
-          Share your analysis or download data and map images
-        </p>
+        <span className="kpi-label">Share & export</span>
+        <p className="text-xs text-muted-foreground mt-1">Share the current settings or download the analysis outputs.</p>
       </div>
 
-      <div className="space-y-2">
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={copyShareLink}
-          className="w-full justify-start gap-2"
-        >
-          {copied ? <Check className="w-3.5 h-3.5 text-success" /> : <Link2 className="w-3.5 h-3.5" />}
-          {copied ? 'Copied!' : 'Copy Share Link'}
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={downloadMapPNG}
-          className="w-full justify-start gap-2"
-        >
-          <Image className="w-3.5 h-3.5" />
-          Download Map as PNG
-        </Button>
-      </div>
+      <Button size="sm" variant="outline" onClick={copyShareLink} className="w-full justify-start gap-2">
+        {copied ? <Check className="w-3.5 h-3.5 text-success" /> : <Link2 className="w-3.5 h-3.5" />}
+        {copied ? 'Copied' : 'Copy share link'}
+      </Button>
 
       <div className="border-t border-border pt-3 space-y-2">
-        <span className="kpi-label">Data Export</span>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={exportCSV}
-          disabled={!hasData}
-          className="w-full justify-start gap-2"
-        >
-          <Download className="w-3.5 h-3.5" />
-          Export as CSV
+        <span className="kpi-label">Data export</span>
+        <Button size="sm" variant="outline" onClick={exportCSV} disabled={!hasData} className="w-full justify-start gap-2">
+          <Download className="w-3.5 h-3.5" /> Facilities CSV
         </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={exportExcel}
-          disabled={!hasData}
-          className="w-full justify-start gap-2"
-        >
-          <FileSpreadsheet className="w-3.5 h-3.5" />
-          Export as Excel
+        <Button size="sm" variant="outline" onClick={exportExcel} disabled={!hasData} className="w-full justify-start gap-2">
+          <FileSpreadsheet className="w-3.5 h-3.5" /> Excel workbook
         </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={exportGeoJSON}
-          disabled={!hasData}
-          className="w-full justify-start gap-2"
-        >
-          <FileJson className="w-3.5 h-3.5" />
-          Export as GeoJSON
+        <Button size="sm" variant="outline" onClick={exportGeoJSON} disabled={!hasData} className="w-full justify-start gap-2">
+          <FileJson className="w-3.5 h-3.5" /> GeoJSON
+        </Button>
+        <Button size="sm" variant="outline" onClick={exportMethodology} disabled={!hasData} className="w-full justify-start gap-2">
+          <FileText className="w-3.5 h-3.5" /> Methodology JSON
         </Button>
       </div>
 
       {!hasData && (
-        <p className="text-xs text-muted-foreground text-center py-2">
-          Run an analysis first to enable data exports
-        </p>
+        <p className="text-xs text-muted-foreground text-center py-2">Run an analysis first to enable data exports.</p>
       )}
     </div>
   );

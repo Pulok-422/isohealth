@@ -292,14 +292,23 @@ export function TopBar() {
                   </button>
                   {/* Suggestions Dropdown */}
                   {suggestions.length > 0 && (
-                    <div className="absolute left-0 top-full mt-2 w-full bg-card border border-border shadow-lg rounded-lg z-50">
+                    <div className="absolute left-0 top-full mt-2 w-full bg-card border border-border shadow-lg rounded-lg z-50 max-h-64 overflow-y-auto">
                       {suggestions.map((suggestion: any) => (
                         <button
                           key={suggestion.place_id}
                           className="w-full text-left p-2 text-sm text-foreground hover:bg-secondary"
                           onClick={() => {
+                            const latNum = parseFloat(suggestion.lat);
+                            const lonNum = parseFloat(suggestion.lon);
+                            if (!Number.isFinite(latNum) || !Number.isFinite(lonNum)) return;
+                            dispatch({ type: 'SET_CENTER', payload: [latNum, lonNum] });
+                            dispatch({ type: 'SET_ZOOM', payload: 13 });
+                            dispatch({ type: 'SET_ANALYSIS_POINT', payload: [latNum, lonNum] });
                             setSearchQuery(suggestion.display_name);
-                            handleSearch();
+                            setLocationLabel(suggestion.display_name);
+                            setSuggestions([]);
+                            setSearchOpen(false);
+                            toast.success(`Location set: ${String(suggestion.display_name).split(',').slice(0, 2).join(', ')}`);
                           }}
                         >
                           {suggestion.display_name}

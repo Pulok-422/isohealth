@@ -1,165 +1,66 @@
-import { Building2, MapPin, Users, Clock, Info, Zap, Shield, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Building2, MapPin, Clock, Info, AlertTriangle } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { useAppState } from '@/context/AppContext';
-import { formatDistanceCompact, formatTravelTime } from '@/lib/travelTime';
-import { haversine } from '@/lib/analysis';
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer } from 'recharts';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { useMemo } from 'react';
-import type { Facility, TransportProfile } from '@/types/health';
+import type { Facility, TransportProfile, FacilityType } from '@/types/health';
+import { ROUTING_PROVIDER_LABEL } from '@/services/routing';
 
-function formatPopulation(n: number): string {
-  if (n >= 1_000_000) return `~${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `~${(n / 1_000).toFixed(0)}K`;
-  return `~${n}`;
+function formatMeters(m?: number | null) {
+  if (m == null || !Number.isFinite(m)) return null;
+  return m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(1)} km`;
+}
+function formatSeconds(s?: number | null) {
+  if (s == null || !Number.isFinite(s)) return null;
+  const mins = Math.round(s / 60);
+  if (mins < 60) return `${mins} min`;
+  const h = Math.floor(mins / 60);
+  const r = mins % 60;
+  return r ? `${h}h ${r}m` : `${h}h`;
 }
 
-function getThresholdLabel(state: any): string {
-  const profile = state.transportProfile as TransportProfile;
-  const modeLabel: Record<TransportProfile, string> = {
-    'foot-walking': 'walking',
-    'cycling-regular': 'cycling',
-    'driving-car': 'driving',
-  };
-  const mode = modeLabel[profile] || 'walking';
+const MODE_LABEL: Record<TransportProfile, string> = {
+  'foot-walking': 'walking',
+  'cycling-regular': 'cycling',
+  'driving-car': 'driving',
+};
 
-  if (state.analysisType === 'distance') {
-    const maxDist = Math.max(...(state.distanceThresholds || [6000]));
-    return `${(maxDist / 1000).toFixed(0)} km ${mode}`;
-  }
-  const maxTime = Math.max(...(state.timeThresholds || [3600]));
-  return `${Math.round(maxTime / 60)} min ${mode}`;
-}
+const TYPE_LABEL: Record<FacilityType, string> = {
+  hospital: 'Hospital',
+  clinic: 'Clinic',
+  pharmacy: 'Pharmacy',
+  doctors: 'Doctor',
+  dentist: 'Dentist',
+  laboratory: 'Laboratory',
+  healthcare: 'Healthcare',
+};
 
-function getCoverageLevel(facilityCount: number): { label: string; color: string; icon: typeof CheckCircle; description: string } {
-  if (facilityCount >= 20) return {
-    label: 'Good',
-    color: 'text-success',
-    icon: CheckCircle,
-    description: 'Strong healthcare coverage with multiple facility types accessible.',
-  };
-  if (facilityCount >= 5) return {
-    label: 'Moderate',
-    color: 'text-chart-amber',
-    icon: Shield,
-    description: 'Some healthcare access available, but coverage could be improved.',
-  };
-  return {
-    label: 'Poor',
-    color: 'text-destructive',
-    icon: AlertTriangle,
-    description: 'Limited healthcare access. Consider expanding range or changing transport mode.',
-  };
-}
-
-function KPICard({ icon: Icon, label, value, subtitle, color = 'text-primary', tooltip }: {
-  icon: typeof Building2;
-  label: string;
-  value: string | number;
-  subtitle?: string;
-  color?: string;
-  tooltip?: string;
-}) {
-  const card = (
+function KPI({ label, value, subtitle, icon: Icon }: { label: string; value: string | number; subtitle?: string; icon: typeof Building2 }) {
+  return (
     <div className="data-card">
       <div className="flex items-center gap-2">
-        <Icon className={`w-4 h-4 ${color}`} />
+        <Icon className="w-4 h-4 text-primary" />
         <span className="kpi-label">{label}</span>
-        {tooltip && <Info className="w-3 h-3 text-muted-foreground/50" />}
       </div>
-      <div className={`kpi-value ${color}`}>{value}</div>
+      <div className="kpi-value text-primary">{value}</div>
       {subtitle && <div className="text-[10px] text-muted-foreground mt-0.5">{subtitle}</div>}
     </div>
   );
-
-  if (!tooltip) return card;
-
-  return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>{card}</TooltipTrigger>
-        <TooltipContent className="max-w-[250px] text-xs">
-          <p>{tooltip}</p>
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  );
 }
 
-function NearestByType({ facilities, analysisPoint, profile }: {
-  facilities: Facility[];
-  analysisPoint: [number, number];
-  profile: TransportProfile;
-}) {
-  const nearestByType = useMemo(() => {
-    const types = ['hospital', 'pharmacy', 'clinic', 'doctors', 'healthcare'] as const;
-    const result: { type: string; facility: Facility; distMeters: number }[] = [];
-
-    for (const type of types) {
-      const ofType = facilities.filter(f => f.type === type);
-      if (!ofType.length) continue;
-
-      let nearest = ofType[0];
-      let minDist = haversine(analysisPoint[0], analysisPoint[1], nearest.lat, nearest.lon);
-
-      for (let i = 1; i < ofType.length; i++) {
-        const d = haversine(analysisPoint[0], analysisPoint[1], ofType[i].lat, ofType[i].lon);
-        if (d < minDist) { minDist = d; nearest = ofType[i]; }
-      }
-
-      result.push({ type, facility: nearest, distMeters: minDist * 1000 });
-    }
-
-    return result.sort((a, b) => a.distMeters - b.distMeters);
-  }, [facilities, analysisPoint, profile]);
-
-  if (!nearestByType.length) return null;
-
-  const typeLabels: Record<string, string> = {
-    hospital: '🏥 Closest Hospital',
-    pharmacy: '💊 Closest Pharmacy',
-    clinic: '🏨 Closest Clinic',
-    doctors: '👨‍⚕️ Closest Doctor',
-    healthcare: '⚕️ Closest Healthcare',
-  };
-
+function NearestRow({ facility, label }: { facility: Facility; label: string }) {
+  const road = formatSeconds(facility.travelDurationSeconds);
+  const roadDist = formatMeters(facility.travelDistanceMeters);
+  const straight = formatMeters(facility.straightLineDistanceMeters);
   return (
-    <div className="data-card space-y-2">
-      <span className="kpi-label">Nearest Facilities by Type</span>
-      {nearestByType.map(({ type, facility, distMeters }) => (
-        <div key={type} className="flex items-start justify-between gap-2 py-1.5 border-b border-border/50 last:border-0">
-          <div className="min-w-0">
-            <div className="text-xs font-medium text-muted-foreground">{typeLabels[type] || type}</div>
-            <div className="text-sm font-medium truncate">{facility.name}</div>
-          </div>
-          <div className="text-right shrink-0">
-            <div className="text-xs font-medium">{formatDistanceCompact(distMeters)}</div>
-            <div className="text-[10px] text-muted-foreground">{formatTravelTime(distMeters, profile)}</div>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function FacilityMixInsight({ facilities }: { facilities: Facility[] }) {
-  const insight = useMemo(() => {
-    if (!facilities.length) return null;
-    const counts: Record<string, number> = {};
-    facilities.forEach(f => { counts[f.type] = (counts[f.type] || 0) + 1; });
-    const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-    if (sorted.length < 2) return null;
-
-    const most = sorted[0][0];
-    const least = sorted[sorted.length - 1][0];
-    return `Most reachable facilities are ${most}s, while ${least} access is more limited.`;
-  }, [facilities]);
-
-  if (!insight) return null;
-
-  return (
-    <div className="flex items-start gap-2 p-2.5 rounded-lg bg-secondary/50 text-xs text-muted-foreground">
-      <Zap className="w-3.5 h-3.5 mt-0.5 shrink-0 text-primary" />
-      <span>{insight}</span>
+    <div className="flex items-start justify-between gap-2 py-1.5 border-b border-border/50 last:border-0">
+      <div className="min-w-0">
+        <div className="text-xs font-medium text-muted-foreground">{label}</div>
+        <div className="text-sm font-medium truncate">{facility.name}</div>
+      </div>
+      <div className="text-right shrink-0 text-[11px]">
+        {road ? <div className="font-medium">{road}</div> : <div className="text-muted-foreground">Road time unavailable</div>}
+        {roadDist && <div className="text-muted-foreground">{roadDist} road</div>}
+        {straight && <div className="text-muted-foreground">{straight} straight</div>}
+      </div>
     </div>
   );
 }
@@ -167,9 +68,15 @@ function FacilityMixInsight({ facilities }: { facilities: Facility[] }) {
 export function SummaryTab() {
   const { state } = useAppState();
   const result = state.analysisResult;
+  const [showMethod, setShowMethod] = useState(false);
 
-  const profile = (result?.profileUsed || state.transportProfile) as TransportProfile;
-  const thresholdLabel = getThresholdLabel(state);
+  const facilityTypeCounts = useMemo(() => {
+    if (!result) return {} as Record<string, number>;
+    return result.facilities.reduce<Record<string, number>>((acc, f) => {
+      acc[f.type] = (acc[f.type] || 0) + 1;
+      return acc;
+    }, {});
+  }, [result]);
 
   if (!result) {
     return (
@@ -178,118 +85,139 @@ export function SummaryTab() {
         <div>
           <h3 className="text-sm font-medium text-foreground">No analysis yet</h3>
           <p className="text-xs text-muted-foreground mt-1">
-            Select a location on the map or search for a place, then click <strong>Analyze Accessibility</strong> to discover nearby healthcare facilities and coverage.
+            Select a location on the map or search for a place, then click <strong>Analyze</strong> to see reachable healthcare facilities.
           </p>
         </div>
       </div>
     );
   }
 
-  const facilityTypes = result.facilities.reduce((acc, f) => {
-    acc[f.type] = (acc[f.type] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
+  const modeLabel = MODE_LABEL[result.profileUsed];
+  const maxRange = Math.max(...result.rangesUsed);
+  const rangeText = result.analysisTypeUsed === 'time' ? `${Math.round(maxRange / 60)}-minute ${modeLabel} area` : `${(maxRange / 1000).toFixed(1)} km ${modeLabel} area`;
+  const headline = `${result.facilities.length} healthcare facilit${result.facilities.length === 1 ? 'y falls' : 'ies fall'} within the selected ${rangeText}.`;
 
-  const chartData = Object.entries(facilityTypes).map(([name, count]) => ({ name, count }));
-
-  // Coverage level
-  const coverage = getCoverageLevel(result.facilities.length);
-  const CoverageIcon = coverage.icon;
-
-  // Key insight line
-  const keyInsight = result.facilities.length > 0
-    ? `${result.facilities.length} health facilities are reachable within ${thresholdLabel}, covering an estimated ${formatPopulation(result.populationCovered)} people.`
-    : `No health facilities found within ${thresholdLabel}. Try increasing the range or switching transport mode.`;
+  const distinctTypes = Object.keys(facilityTypeCounts).length;
+  const nearestSeconds = result.nearestFacility?.travelDurationSeconds;
 
   return (
     <div className="space-y-3 p-3">
-      {/* Key Insight */}
       <div className="p-3 rounded-lg bg-primary/5 border border-primary/10">
-        <p className="text-xs font-medium text-foreground leading-relaxed">{keyInsight}</p>
+        <p className="text-xs font-medium text-foreground leading-relaxed">{headline}</p>
+        {!result.matrixAvailable && (
+          <p className="text-[11px] text-muted-foreground mt-1">Road-network travel time and distance are temporarily unavailable.</p>
+        )}
+        {result.matrixAvailable && !result.matrixCoverage.complete && (
+          <p className="text-[11px] text-muted-foreground mt-1">
+            Road-network metrics were evaluated for {result.matrixCoverage.evaluatedFacilities} of {result.matrixCoverage.totalReachableFacilities} reachable facilities.
+          </p>
+        )}
       </div>
 
-      {/* Coverage Level */}
-      <div className="flex items-center gap-3 p-2.5 rounded-lg border border-border bg-card">
-        <CoverageIcon className={`w-5 h-5 ${coverage.color}`} />
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold">Coverage Level:</span>
-            <span className={`text-xs font-bold ${coverage.color}`}>{coverage.label}</span>
-          </div>
-          <p className="text-[10px] text-muted-foreground mt-0.5">{coverage.description}</p>
-        </div>
-      </div>
-
-      {/* Coverage Threshold Badge */}
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <Clock className="w-3 h-3" />
-        Coverage threshold: <span className="font-semibold text-foreground">{thresholdLabel}</span>
-      </div>
-
-      {/* Population Source Badge */}
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-help">
-              <Info className="w-3 h-3" />
-              Population Source: <span className="font-medium text-foreground">Estimated (local model)</span>
+      {result.warnings.length > 0 && (
+        <div className="p-2.5 rounded-lg border border-amber-500/30 bg-amber-500/5 space-y-1">
+          {result.warnings.map((w, i) => (
+            <div key={i} className="flex items-start gap-2 text-[11px] text-foreground/80">
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-500" />
+              <span>{w}</span>
             </div>
-          </TooltipTrigger>
-          <TooltipContent className="max-w-[300px] text-xs">
-            <p>Population figures are rough estimates generated locally in your browser from a synthetic density grid. No user data is stored.</p>
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-
-      {/* KPIs */}
-      <div className="grid grid-cols-2 gap-2">
-        <KPICard
-          icon={Building2}
-          label="Nearby Health Facilities"
-          value={result.facilities.length}
-          subtitle={`within ${thresholdLabel}`}
-        />
-        <KPICard
-          icon={Users}
-          label="Est. Population in Service Area"
-          value={formatPopulation(result.populationCovered)}
-          color="text-success"
-          tooltip="Estimated population within the isochrone coverage area, based on WorldPop density data."
-        />
-      </div>
-
-      {/* Facility Mix Insight */}
-      <FacilityMixInsight facilities={result.facilities} />
-
-      {/* Nearest Facilities by Type */}
-      {state.analysisPoint && (
-        <NearestByType
-          facilities={result.facilities}
-          analysisPoint={state.analysisPoint}
-          profile={profile}
-        />
-      )}
-
-      {/* Facility Types Chart */}
-      {chartData.length > 0 && (
-        <div className="data-card">
-          <span className="kpi-label">Facility Types</span>
-          <div className="h-28 mt-2">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData}>
-                <XAxis dataKey="name" tick={{ fontSize: 10 }} />
-                <YAxis tick={{ fontSize: 10 }} />
-                <Bar dataKey="count" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          ))}
         </div>
       )}
 
-      {/* Data source attribution */}
+      <div className="grid grid-cols-2 gap-2">
+        <KPI icon={Building2} label="Reachable facilities" value={result.facilities.length} subtitle={`in ${rangeText}`} />
+        <KPI icon={MapPin} label="Nearby queried" value={result.nearbyFacilities.length} subtitle={`within ${formatMeters(result.facilityQueryRadiusMeters ?? undefined) ?? '—'} of origin`} />
+        <KPI icon={Info} label="Distinct types" value={distinctTypes} />
+        <KPI icon={Clock} label="Nearest road time" value={formatSeconds(nearestSeconds) ?? '—'} subtitle={result.matrixAvailable ? undefined : 'Matrix unavailable'} />
+      </div>
+
+      {/* Bands */}
+      <div className="data-card">
+        <span className="kpi-label">Travel bands</span>
+        <div className="mt-2 space-y-1">
+          <div className="grid grid-cols-3 gap-2 text-[10px] font-semibold text-muted-foreground uppercase">
+            <span>Band</span>
+            <span className="text-right">In band</span>
+            <span className="text-right">Cumulative</span>
+          </div>
+          {result.bands.map((b) => (
+            <div key={b.index} className="grid grid-cols-3 gap-2 text-xs">
+              <span>{b.label}</span>
+              <span className="text-right font-medium">{result.incrementalCountsByBand[b.label] ?? 0}</span>
+              <span className="text-right text-muted-foreground">{result.cumulativeCountsByBand[b.label] ?? 0}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Nearest */}
+      {result.nearestFacility && (
+        <div className="data-card space-y-1">
+          <span className="kpi-label">Nearest facility</span>
+          <NearestRow facility={result.nearestFacility} label={result.matrixCoverage.complete ? 'Overall nearest' : 'Nearest among evaluated'} />
+        </div>
+      )}
+
+      {/* Nearest by type */}
+      {Object.keys(result.nearestByType).length > 0 && (
+        <div className="data-card space-y-1">
+          <span className="kpi-label">Nearest by type</span>
+          {(Object.entries(result.nearestByType) as [FacilityType, Facility][]).map(([t, f]) => (
+            <NearestRow key={t} facility={f} label={TYPE_LABEL[t] ?? t} />
+          ))}
+        </div>
+      )}
+
+      {/* Data quality */}
+      <div className="data-card">
+        <span className="kpi-label">Data quality</span>
+        <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+          <div>Total: <span className="text-foreground">{result.dataQuality.total}</span></div>
+          <div>Named: <span className="text-foreground">{result.dataQuality.withName}</span></div>
+          <div>Unnamed: <span className="text-foreground">{result.dataQuality.withoutName}</span></div>
+          <div>With operator: <span className="text-foreground">{result.dataQuality.withOperator}</span></div>
+          <div>With hours: <span className="text-foreground">{result.dataQuality.withOpeningHours}</span></div>
+          <div>Emergency tag: <span className="text-foreground">{result.dataQuality.withEmergencyTag}</span></div>
+          <div>OSM nodes: <span className="text-foreground">{result.dataQuality.osmNodes}</span></div>
+          <div>OSM ways: <span className="text-foreground">{result.dataQuality.osmWays}</span></div>
+          <div>OSM relations: <span className="text-foreground">{result.dataQuality.osmRelations}</span></div>
+        </div>
+      </div>
+
+      {/* Methodology */}
+      <div className="data-card">
+        <button
+          type="button"
+          onClick={() => setShowMethod((v) => !v)}
+          className="w-full flex items-center justify-between text-left"
+          aria-expanded={showMethod}
+        >
+          <span className="kpi-label">Methodology</span>
+          <span className="text-xs text-muted-foreground">{showMethod ? 'Hide' : 'Show'}</span>
+        </button>
+        {showMethod && (
+          <div className="mt-2 space-y-1 text-[11px] text-muted-foreground">
+            <div>Analysis date: {new Date(result.analysisDate).toLocaleString()}</div>
+            <div>Origin: {result.origin.lat.toFixed(5)}, {result.origin.lon.toFixed(5)}{result.origin.label ? ` (${result.origin.label})` : ''}</div>
+            <div>Routing provider: {ROUTING_PROVIDER_LABEL}</div>
+            <div>Transport profile: {result.profileUsed}</div>
+            <div>Analysis type: {result.analysisTypeUsed}</div>
+            <div>Ranges: {result.rangesUsed.join(', ')} {result.analysisTypeUsed === 'time' ? 's' : 'm'}</div>
+            <div>Facility source: {result.facilitySourceMode}</div>
+            <div>Facility query radius: {formatMeters(result.facilityQueryRadiusMeters ?? undefined) ?? '—'}</div>
+            <div>Matrix evaluated: {result.matrixCoverage.evaluatedFacilities} of {result.matrixCoverage.totalReachableFacilities}</div>
+            <p className="pt-1">
+              Facilities were assigned to the smallest travel-area polygon containing their coordinates. Road travel times and distances were calculated using {ROUTING_PROVIDER_LABEL} where matrix results were available. Straight-line distance was calculated geometrically and was not used as a substitute for road travel time.
+            </p>
+          </div>
+        )}
+      </div>
+
       <div className="text-[10px] text-muted-foreground space-y-0.5 pt-2 border-t border-border">
-        <p>📍 Facility data: OpenStreetMap contributors</p>
-        <p>📊 Travel time estimated using road network data</p>
+        <p>Facility data: OpenStreetMap contributors via Overpass API.</p>
+        <p>Travel areas and road-network metrics: {ROUTING_PROVIDER_LABEL}.</p>
+        <p>Results depend on the completeness of the source facility and road-network data.</p>
       </div>
     </div>
   );
