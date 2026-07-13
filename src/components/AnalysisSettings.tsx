@@ -10,8 +10,8 @@ const transportModes: { id: TransportProfile; icon: typeof Car; label: string; d
   { id: 'driving-car', icon: Car, label: 'Driving', defaultSpeed: 40 },
 ];
 
-const TIME_PRESETS = [10, 20, 30, 40, 50, 60];
-const DISTANCE_PRESETS = [1, 2, 3, 4, 5, 6];
+const TIME_OPTIONS = [10, 20, 30, 40, 50, 60];
+const DISTANCE_OPTIONS = [1, 2, 3, 4, 5, 6];
 
 export function AnalysisSettings() {
   const { state, dispatch } = useAppState();
@@ -74,7 +74,7 @@ export function AnalysisSettings() {
           Range Bands ({state.analysisType === 'time' ? 'minutes' : 'km'})
         </label>
         <div className="flex flex-wrap gap-1.5">
-          {(state.analysisType === 'time' ? TIME_PRESETS : DISTANCE_PRESETS).map((val) => {
+          {(state.analysisType === 'time' ? TIME_OPTIONS : DISTANCE_OPTIONS).map((val) => {
             const inSeconds = val * 60;
             const inMeters = val * 1000;
             const thresholds =
