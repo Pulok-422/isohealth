@@ -1,256 +1,304 @@
+// Vercel Serverless Function — fetch healthcare facilities from OpenStreetMap Overpass.
+
 type Handler = (req: any, res: any) => Promise<any>;
 
 export const config = {
-  maxDuration: 10,
+  maxDuration: 30,
 };
 
-const VERSION = 'v6-node-only-debug';
+type FacilityType =
+  | 'hospital'
+  | 'clinic'
+  | 'pharmacy'
+  | 'doctors'
+  | 'dentist'
+  | 'laboratory'
+  | 'healthcare';
 
-type FacilityType = 'hospital' | 'clinic' | 'pharmacy' | 'doctors' | 'healthcare';
+type OsmObjectType = 'node' | 'way' | 'relation';
 
-type RawNode = {
-  type?: string;
+type RawOsmElement = {
+  type?: OsmObjectType;
   id?: number | string;
   lat?: number;
   lon?: number;
-  tags?: Record<string, any>;
+  center?: { lat?: number; lon?: number };
+  tags?: Record<string, unknown>;
+};
+
+type RawOverpassResponse = { elements?: RawOsmElement[] };
+
+type NormalizedFacility = {
+  id: string;
+  source: 'OpenStreetMap';
+  osmType: OsmObjectType;
+  osmId: number | string;
+  name: string;
+  localName?: string;
+  type: FacilityType;
+  lat: number;
+  lon: number;
+  tags: Record<string, string>;
+  operator?: string;
+  openingHours?: string;
+  emergency?: string;
+  speciality?: string;
+  straightLineDistanceMeters: number;
 };
 
 const OVERPASS_ENDPOINTS = [
-  'https://overpass-api.de/api/interpreter',
   'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass-api.de/api/interpreter',
 ];
 
-function clampRadius(radius: unknown) {
-  const parsed = Number(radius);
-  if (!Number.isFinite(parsed)) return 5000;
-  return Math.min(Math.max(parsed, 1000), 7000);
-}
+const MAX_FACILITIES = 1000;
+const DEDUPE_TOLERANCE_METERS = 15;
 
-function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
-  const R = 6371;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-
+function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6_371_000;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
   const a =
     Math.sin(dLat / 2) ** 2 +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) ** 2;
-
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-function buildNodeAroundQuery(lat: number, lon: number, radius: number) {
+function buildFacilityQuery(lat: number, lon: number, radius: number): string {
   return `
-[out:json][timeout:7];
+[out:json][timeout:20];
 (
-  node["amenity"="hospital"](around:${radius},${lat},${lon});
-  node["amenity"="clinic"](around:${radius},${lat},${lon});
-  node["amenity"="pharmacy"](around:${radius},${lat},${lon});
-  node["amenity"="doctors"](around:${radius},${lat},${lon});
-  node["amenity"="dentist"](around:${radius},${lat},${lon});
-
-  node["healthcare"="hospital"](around:${radius},${lat},${lon});
-  node["healthcare"="clinic"](around:${radius},${lat},${lon});
-  node["healthcare"="pharmacy"](around:${radius},${lat},${lon});
-  node["healthcare"="doctor"](around:${radius},${lat},${lon});
-  node["healthcare"="doctors"](around:${radius},${lat},${lon});
-  node["healthcare"="centre"](around:${radius},${lat},${lon});
-  node["healthcare"="dentist"](around:${radius},${lat},${lon});
+  nwr["amenity"~"^(hospital|clinic|pharmacy|doctors|dentist)$"](around:${radius},${lat},${lon});
+  nwr["healthcare"~"^(hospital|clinic|pharmacy|doctor|doctors|centre|health_centre|dentist|laboratory)$"](around:${radius},${lat},${lon});
 );
-out body 300;
+out center tags qt;
 `;
 }
 
-function normaliseNode(el: RawNode, originLat: number, originLon: number) {
-  if (typeof el.lat !== 'number' || typeof el.lon !== 'number') return null;
-
-  const tags = el.tags || {};
-  const amenity = String(tags.amenity || '').toLowerCase();
-  const healthcare = String(tags.healthcare || '').toLowerCase();
-
-  let type: FacilityType = 'healthcare';
-
-  if (amenity === 'hospital' || healthcare === 'hospital') {
-    type = 'hospital';
-  } else if (amenity === 'clinic' || healthcare === 'clinic' || healthcare === 'centre') {
-    type = 'clinic';
-  } else if (amenity === 'pharmacy' || healthcare === 'pharmacy') {
-    type = 'pharmacy';
-  } else if (
-    amenity === 'doctors' ||
-    amenity === 'dentist' ||
-    healthcare === 'doctor' ||
-    healthcare === 'doctors' ||
-    healthcare === 'dentist'
-  ) {
-    type = 'doctors';
+function tagsToStringMap(raw: Record<string, unknown> | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!raw) return out;
+  for (const [key, value] of Object.entries(raw)) {
+    if (value == null) continue;
+    out[key] = String(value);
   }
+  return out;
+}
 
-  const distanceKm = haversineKm(originLat, originLon, el.lat, el.lon);
+function mapFacilityType(tags: Record<string, string>): FacilityType {
+  const amenity = (tags.amenity || '').toLowerCase();
+  const healthcare = (tags.healthcare || '').toLowerCase();
+
+  if (amenity === 'hospital' || healthcare === 'hospital') return 'hospital';
+  if (
+    amenity === 'clinic' ||
+    healthcare === 'clinic' ||
+    healthcare === 'centre' ||
+    healthcare === 'health_centre'
+  ) {
+    return 'clinic';
+  }
+  if (amenity === 'pharmacy' || healthcare === 'pharmacy') return 'pharmacy';
+  if (amenity === 'doctors' || healthcare === 'doctor' || healthcare === 'doctors') return 'doctors';
+  if (amenity === 'dentist' || healthcare === 'dentist') return 'dentist';
+  if (healthcare === 'laboratory') return 'laboratory';
+  return 'healthcare';
+}
+
+function prettyType(type: FacilityType): string {
+  return type.charAt(0).toUpperCase() + type.slice(1);
+}
+
+function resolveName(tags: Record<string, string>, type: FacilityType): { name: string; localName?: string } {
+  const localName = tags.name || tags['name:local'] || undefined;
+  const name =
+    tags['name:en'] ||
+    tags.name ||
+    tags.official_name ||
+    tags.operator ||
+    tags.brand ||
+    prettyType(type);
+  return { name, localName: localName && localName !== name ? localName : undefined };
+}
+
+function normalizeElement(el: RawOsmElement, originLat: number, originLon: number): NormalizedFacility | null {
+  const lat = typeof el.lat === 'number' ? el.lat : el.center?.lat;
+  const lon = typeof el.lon === 'number' ? el.lon : el.center?.lon;
+  if (typeof lat !== 'number' || typeof lon !== 'number') return null;
+  if (!el.type || el.id == null) return null;
+
+  const tags = tagsToStringMap(el.tags);
+  const type = mapFacilityType(tags);
+  const { name, localName } = resolveName(tags, type);
 
   return {
-    id: `${el.type || 'node'}-${el.id}`,
-    osmType: el.type || 'node',
+    id: `${el.type}-${el.id}`,
+    source: 'OpenStreetMap',
+    osmType: el.type,
     osmId: el.id,
-    name:
-      tags.name ||
-      tags['name:en'] ||
-      tags.operator ||
-      tags.brand ||
-      `${type.charAt(0).toUpperCase() + type.slice(1)}`,
+    name,
+    localName,
     type,
-    lat: el.lat,
-    lon: el.lon,
-    distanceKm,
+    lat,
+    lon,
     tags,
+    operator: tags.operator || tags.brand || undefined,
+    openingHours: tags.opening_hours || undefined,
+    emergency: tags.emergency || undefined,
+    speciality: tags['healthcare:speciality'] || tags.speciality || undefined,
+    straightLineDistanceMeters: haversineMeters(originLat, originLon, lat, lon),
   };
 }
 
-async function queryEndpoint(endpoint: string, query: string) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 8500);
+function normalizeName(name: string): string {
+  return name.trim().toLowerCase().replace(/\s+/g, ' ');
+}
 
+function dedupeFacilities(list: NormalizedFacility[]): { unique: NormalizedFacility[]; possibleDuplicates: number } {
+  const seenIds = new Set<string>();
+  const primary: NormalizedFacility[] = [];
+  for (const f of list) {
+    const key = `${f.osmType}-${f.osmId}`;
+    if (seenIds.has(key)) continue;
+    seenIds.add(key);
+    primary.push(f);
+  }
+
+  let possibleDuplicates = 0;
+  const kept: NormalizedFacility[] = [];
+  for (const f of primary) {
+    const dup = kept.find((k) => {
+      if (k.type !== f.type) return false;
+      if (normalizeName(k.name) !== normalizeName(f.name)) return false;
+      return haversineMeters(k.lat, k.lon, f.lat, f.lon) <= DEDUPE_TOLERANCE_METERS;
+    });
+    if (dup) {
+      possibleDuplicates++;
+      continue;
+    }
+    kept.push(f);
+  }
+
+  return { unique: kept, possibleDuplicates };
+}
+
+async function queryEndpoint(endpoint: string, query: string, timeoutMs: number): Promise<RawOverpassResponse> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(endpoint, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
-      },
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
       body: `data=${encodeURIComponent(query)}`,
       signal: controller.signal,
     });
-
     const text = await response.text();
-
     if (!response.ok) {
-      throw new Error(`Overpass ${response.status}: ${text.slice(0, 200)}`);
+      const err = new Error(`Overpass ${response.status}`) as Error & { status?: number };
+      err.status = response.status;
+      throw err;
     }
-
-    return JSON.parse(text);
+    try {
+      return JSON.parse(text) as RawOverpassResponse;
+    } catch {
+      throw new Error('Overpass returned invalid JSON');
+    }
   } finally {
     clearTimeout(timer);
   }
 }
 
-async function queryOverpass(query: string) {
-  let lastError = '';
-
-  for (const endpoint of OVERPASS_ENDPOINTS) {
-    try {
-      return await queryEndpoint(endpoint, query);
-    } catch (error: any) {
-      lastError = error?.message || 'Overpass failed';
-      console.error('Overpass endpoint failed:', endpoint, lastError);
-    }
-  }
-
-  throw new Error(lastError || 'All Overpass endpoints failed');
-}
-
-const handler: Handler = async (req, res) => {
+function sendCors(res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   res.setHeader('Content-Type', 'application/json');
+}
+
+const handler: Handler = async (req, res) => {
+  sendCors(res);
 
   if (req.method === 'OPTIONS') return res.status(204).end();
-
   if (req.method !== 'POST') {
-    return res.status(405).json({
-      success: false,
-      error: 'Method not allowed',
-      version: VERSION,
-    });
+    return res.status(405).json({ success: false, error: 'Method not allowed' });
   }
 
+  let body: any = {};
   try {
-    const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body || {};
+    body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body || {};
+  } catch {
+    return res.status(400).json({ success: false, error: 'Request body must be valid JSON.' });
+  }
 
-    const lat = Number(body.lat);
-    const lon = Number(body.lon);
-    const radius = clampRadius(body.radius);
+  const lat = Number(body.lat);
+  const lon = Number(body.lon);
+  const radius = Number(body.radius);
 
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid coordinates',
-        version: VERSION,
-      });
-    }
+  if (!Number.isFinite(lat) || lat < -90 || lat > 90) {
+    return res.status(400).json({ success: false, error: 'Latitude must be a finite number between -90 and 90.' });
+  }
+  if (!Number.isFinite(lon) || lon < -180 || lon > 180) {
+    return res.status(400).json({ success: false, error: 'Longitude must be a finite number between -180 and 180.' });
+  }
+  if (!Number.isFinite(radius) || radius < 1000 || radius > 50_000) {
+    return res.status(400).json({ success: false, error: 'Radius must be between 1000 and 50000 metres.' });
+  }
 
-    const query = buildNodeAroundQuery(lat, lon, radius);
+  const query = buildFacilityQuery(lat, lon, radius);
 
-    let rawElements: RawNode[] = [];
-    let warning = '';
+  let lastStatus: number | undefined;
+  let lastError = '';
+  let providerUsed = '';
+  let rawResponse: RawOverpassResponse | null = null;
 
+  for (const endpoint of OVERPASS_ENDPOINTS) {
     try {
-      const raw = await queryOverpass(query);
-      rawElements = Array.isArray(raw?.elements) ? raw.elements : [];
-    } catch (error: any) {
-      warning = error?.message || 'Overpass query failed';
-      console.error('Facility node-only query failed:', warning);
+      rawResponse = await queryEndpoint(endpoint, query, 10_000);
+      providerUsed = endpoint;
+      break;
+    } catch (error) {
+      const e = error as Error & { status?: number };
+      lastStatus = e.status;
+      lastError = e.message || 'Overpass request failed';
+      console.error('Overpass endpoint failed:', endpoint, lastError);
     }
+  }
 
-    const facilities = rawElements
-      .map((el) => normaliseNode(el, lat, lon))
-      .filter(Boolean)
-      .filter((f: any) => Number(f.distanceKm) * 1000 <= radius);
-
-    const seen = new Set<string>();
-
-    const unique = facilities.filter((f: any) => {
-      const key = f.osmId
-        ? `${f.osmType}-${f.osmId}`
-        : `${Number(f.lat).toFixed(5)},${Number(f.lon).toFixed(5)},${f.type},${f.name}`;
-
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-
-    unique.sort((a: any, b: any) => Number(a.distanceKm) - Number(b.distanceKm));
-
-    const debug = {
-      version: VERSION,
-      lat,
-      lon,
-      radius,
-      rawElementCount: rawElements.length,
-      facilityCount: unique.length,
-      warning,
-      firstRawElement: rawElements[0] || null,
-      firstFacility: unique[0] || null,
-    };
-
-    console.log('Facility API debug:', debug);
-
-    return res.status(200).json({
-      success: true,
-      data: {
-        facilities: unique.slice(0, 300),
-        radiusUsed: radius,
-        source: 'OpenStreetMap Overpass',
-        warning: unique.length === 0 ? warning || 'No node-based OSM healthcare facilities returned' : undefined,
-        debug,
-      },
-    });
-  } catch (error: any) {
-    return res.status(200).json({
-      success: true,
-      data: {
-        facilities: [],
-        radiusUsed: null,
-        source: 'OpenStreetMap Overpass',
-        warning: error?.message || 'Facility fetch failed safely',
-        debug: {
-          version: VERSION,
-          crashed: true,
-        },
-      },
+  if (!rawResponse) {
+    const status = lastStatus === 429 ? 429 : 503;
+    return res.status(status).json({
+      success: false,
+      error:
+        status === 429
+          ? 'The OpenStreetMap facility service is rate-limited. Please try again shortly.'
+          : 'The OpenStreetMap facility service is temporarily unavailable.',
     });
   }
+
+  const rawElements = Array.isArray(rawResponse.elements) ? rawResponse.elements : [];
+  const normalized = rawElements
+    .map((el) => normalizeElement(el, lat, lon))
+    .filter((f): f is NormalizedFacility => f !== null)
+    .sort((a, b) => a.straightLineDistanceMeters - b.straightLineDistanceMeters);
+
+  const { unique, possibleDuplicates } = dedupeFacilities(normalized);
+  const truncated = unique.length > MAX_FACILITIES;
+  const facilities = truncated ? unique.slice(0, MAX_FACILITIES) : unique;
+
+  return res.status(200).json({
+    success: true,
+    data: {
+      facilities,
+      radiusUsed: radius,
+      source: 'OpenStreetMap Overpass',
+      provider: providerUsed,
+      truncated,
+      rawElementCount: rawElements.length,
+      normalizedCount: unique.length,
+      possibleDuplicateCount: possibleDuplicates,
+    },
+  });
 };
 
 export default handler;
