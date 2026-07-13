@@ -1,7 +1,16 @@
-import type { Feature, FeatureCollection } from 'geojson';
+import type {
+  Feature,
+  FeatureCollection,
+} from 'geojson';
 
-export type TransportProfile = 'driving-car' | 'cycling-regular' | 'foot-walking';
-export type AnalysisType = 'time' | 'distance';
+export type TransportProfile =
+  | 'driving-car'
+  | 'cycling-regular'
+  | 'foot-walking';
+
+export type AnalysisType =
+  | 'time'
+  | 'distance';
 
 export type FacilityType =
   | 'hospital'
@@ -12,9 +21,35 @@ export type FacilityType =
   | 'laboratory'
   | 'healthcare';
 
-export type FacilitySource = 'OpenStreetMap' | 'Uploaded';
+export type FacilitySource =
+  | 'OpenStreetMap'
+  | 'Uploaded';
 
-export type OsmObjectType = 'node' | 'way' | 'relation';
+export type OsmObjectType =
+  | 'node'
+  | 'way'
+  | 'relation';
+
+export type FacilityStatus =
+  | 'success'
+  | 'empty'
+  | 'unavailable';
+
+export type ProviderOutcome =
+  | 'success'
+  | 'timeout'
+  | 'network_error'
+  | 'http_error'
+  | 'invalid_json'
+  | 'invalid_response';
+
+export interface ProviderAttempt {
+  provider: string;
+  status?: number;
+  durationMs: number;
+  outcome: ProviderOutcome;
+  message?: string;
+}
 
 export interface Facility {
   id: string;
@@ -98,24 +133,36 @@ export interface AnalysisResult {
   nearbyFacilities: Facility[];
 
   nearestFacility: Facility | null;
-  nearestByType: Partial<Record<FacilityType, Facility>>;
+  nearestByType:
+    Partial<Record<FacilityType, Facility>>;
 
   profileUsed: TransportProfile;
   analysisTypeUsed: AnalysisType;
   rangesUsed: number[];
 
-  facilitySourceMode: 'osm' | 'uploaded' | 'combined';
+  facilitySourceMode:
+    | 'osm'
+    | 'uploaded'
+    | 'combined';
 
-  facilityQueryRadiusMeters: number | null;
+  facilityStatus: FacilityStatus;
+  facilityQueryRadiusMeters: number;
   facilityResultTruncated: boolean;
+  facilityProvider?: string;
+  facilityRequestId?: string;
+  facilityAttempts: ProviderAttempt[];
+  facilityErrorMessage?: string;
 
   matrixAvailable: boolean;
   matrixCoverage: MatrixCoverage;
 
   dataQuality: FacilityDataQuality;
 
-  cumulativeCountsByBand: Record<string, number>;
-  incrementalCountsByBand: Record<string, number>;
+  cumulativeCountsByBand:
+    Record<string, number>;
+
+  incrementalCountsByBand:
+    Record<string, number>;
 
   warnings: string[];
 }
@@ -142,7 +189,6 @@ export interface AppState {
   analysisType: AnalysisType;
   timeThresholds: number[];
   distanceThresholds: number[];
-  speed: number;
   activeTab: string;
   isAnalyzing: boolean;
   analysisError: string | null;
