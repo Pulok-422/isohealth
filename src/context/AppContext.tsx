@@ -3,22 +3,13 @@ import type {
   AppState,
   Facility,
   AnalysisResult,
-  Scenario,
   TransportProfile,
   AnalysisType,
-  OptimizationResult,
-  PopulationPoint,
 } from '@/types/health';
 
 interface State extends AppState {
   facilities: Facility[];
-  simulatedFacilities: Facility[];
   analysisResult: AnalysisResult | null;
-  populationGrid: PopulationPoint[];
-  scenarios: Scenario[];
-  activeScenario: string | null;
-  optimizationResults: OptimizationResult[];
-  routeGeoJson: any;
 }
 
 const DEFAULT_SPEEDS: Record<TransportProfile, number> = {
@@ -32,31 +23,20 @@ type Action =
   | { type: 'SET_ZOOM'; payload: number }
   | { type: 'SET_TRANSPORT'; payload: TransportProfile }
   | { type: 'SET_ANALYSIS_POINT'; payload: [number, number] | null }
+  | { type: 'SET_ORIGIN_LABEL'; payload: string }
   | { type: 'SET_ANALYSIS_TYPE'; payload: AnalysisType }
   | { type: 'SET_THRESHOLDS'; payload: number[] }
   | { type: 'SET_DISTANCE_THRESHOLDS'; payload: number[] }
   | { type: 'SET_SPEED'; payload: number }
   | { type: 'SET_FACILITIES'; payload: Facility[] }
-  | { type: 'SET_SIMULATED_FACILITIES'; payload: Facility[] }
-  | { type: 'ADD_SIMULATED_FACILITY'; payload: Facility }
-  | { type: 'REMOVE_SIMULATED_FACILITY'; payload: number | string }
   | { type: 'SET_ANALYSIS_RESULT'; payload: AnalysisResult | null }
-  | { type: 'SET_POPULATION'; payload: PopulationPoint[] }
   | { type: 'SET_ANALYZING'; payload: boolean }
+  | { type: 'SET_ANALYSIS_ERROR'; payload: string | null }
   | { type: 'SET_ACTIVE_TAB'; payload: string }
   | {
       type: 'TOGGLE_LAYER';
-      payload: keyof Pick<
-        AppState,
-        'showFacilities' | 'showIsochrones' | 'showPopulation' | 'showUnderserved'
-      >;
+      payload: keyof Pick<AppState, 'showFacilities' | 'showIsochrones'>;
     }
-  | { type: 'SET_SIMULATION_MODE'; payload: boolean }
-  | { type: 'ADD_SCENARIO'; payload: Scenario }
-  | { type: 'SET_ACTIVE_SCENARIO'; payload: string | null }
-  | { type: 'SET_OPTIMIZATION'; payload: OptimizationResult[] }
-  | { type: 'SET_ROUTE'; payload: any }
-  | { type: 'SET_SEARCH_RADIUS'; payload: number }
   | { type: 'RESET_ANALYSIS' };
 
 const initialState: State = {
@@ -64,26 +44,18 @@ const initialState: State = {
   zoom: 12,
   transportProfile: 'foot-walking',
   analysisPoint: null,
+  originLabel: '',
   analysisType: 'time',
   timeThresholds: [600, 1200, 1800, 2400, 3000, 3600],
   distanceThresholds: [1000, 2000, 3000, 4000, 5000, 6000],
   speed: 5,
-  searchRadius: 10000,
   activeTab: 'settings',
   isAnalyzing: false,
+  analysisError: null,
   showFacilities: true,
   showIsochrones: true,
-  showPopulation: false,
-  showUnderserved: false,
-  simulationMode: false,
   facilities: [],
-  simulatedFacilities: [],
   analysisResult: null,
-  populationGrid: [],
-  scenarios: [],
-  activeScenario: null,
-  optimizationResults: [],
-  routeGeoJson: null,
 };
 
 function reducer(state: State, action: Action): State {
@@ -104,6 +76,9 @@ function reducer(state: State, action: Action): State {
     case 'SET_ANALYSIS_POINT':
       return { ...state, analysisPoint: action.payload };
 
+    case 'SET_ORIGIN_LABEL':
+      return { ...state, originLabel: action.payload };
+
     case 'SET_ANALYSIS_TYPE':
       return { ...state, analysisType: action.payload };
 
@@ -119,31 +94,14 @@ function reducer(state: State, action: Action): State {
     case 'SET_FACILITIES':
       return { ...state, facilities: action.payload };
 
-    case 'SET_SIMULATED_FACILITIES':
-      return { ...state, simulatedFacilities: action.payload };
-
-    case 'ADD_SIMULATED_FACILITY':
-      return {
-        ...state,
-        simulatedFacilities: [...state.simulatedFacilities, action.payload],
-      };
-
-    case 'REMOVE_SIMULATED_FACILITY':
-      return {
-        ...state,
-        simulatedFacilities: state.simulatedFacilities.filter(
-          (f) => f.id !== action.payload
-        ),
-      };
-
     case 'SET_ANALYSIS_RESULT':
       return { ...state, analysisResult: action.payload };
 
-    case 'SET_POPULATION':
-      return { ...state, populationGrid: action.payload };
-
     case 'SET_ANALYZING':
       return { ...state, isAnalyzing: action.payload };
+
+    case 'SET_ANALYSIS_ERROR':
+      return { ...state, analysisError: action.payload };
 
     case 'SET_ACTIVE_TAB':
       return { ...state, activeTab: action.payload };
@@ -151,33 +109,14 @@ function reducer(state: State, action: Action): State {
     case 'TOGGLE_LAYER':
       return { ...state, [action.payload]: !state[action.payload] };
 
-    case 'SET_SIMULATION_MODE':
-      return { ...state, simulationMode: action.payload };
-
-    case 'ADD_SCENARIO':
-      return { ...state, scenarios: [...state.scenarios, action.payload] };
-
-    case 'SET_ACTIVE_SCENARIO':
-      return { ...state, activeScenario: action.payload };
-
-    case 'SET_OPTIMIZATION':
-      return { ...state, optimizationResults: action.payload };
-
-    case 'SET_ROUTE':
-      return { ...state, routeGeoJson: action.payload };
-
-    case 'SET_SEARCH_RADIUS':
-      return { ...state, searchRadius: action.payload };
-
     case 'RESET_ANALYSIS':
       return {
         ...state,
         analysisPoint: null,
+        originLabel: '',
         analysisResult: null,
         facilities: [],
-        populationGrid: [],
-        optimizationResults: [],
-        routeGeoJson: null,
+        analysisError: null,
       };
 
     default:
